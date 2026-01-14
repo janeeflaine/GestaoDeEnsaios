@@ -1,0 +1,7 @@
+{
+  "name": "Gestão de Ensaios 2026",
+  "description": "Aplicativo moderno para gestão de ensaios regionais e locais, confirmação de presença e integração com calendário.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
