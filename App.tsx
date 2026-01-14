@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload } from 'lucide-react';
 import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS } from './types';
 import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
 import { getGoogleCalendarUrl } from './utils/calendar';
 import { supabase } from './supabaseClient';
+import ImageCropperModal from './components/ImageCropper';
 
 // --- Utility: Type Colors ---
 const getTypeStyles = (type: EventType) => {
@@ -213,6 +214,11 @@ export default function App() {
   const [isCreatingCongregation, setIsCreatingCongregation] = useState(false);
 
   const [creatingEventType, setCreatingEventType] = useState<EventType>(EventType.LOCAL);
+
+  // Photo Upload State
+  const [isCropping, setIsCropping] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [globalSearch, setGlobalSearch] = useState('');
   const [monthFilter, setMonthFilter] = useState('Todos');
@@ -514,6 +520,29 @@ export default function App() {
     alert(selectedCongregation ? 'Congregação atualizada!' : 'Congregação cadastrada!');
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        setImageToCrop(reader.result as string);
+        setIsCropping(true);
+      });
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  };
+
+  const onCropComplete = (croppedImage: string) => {
+    setUserProfile(prev => prev ? { ...prev, photoUrl: croppedImage } : {
+      name: '',
+      email: '',
+      phone: '',
+      instrument: 'Violino',
+      photoUrl: croppedImage
+    });
+    setIsCropping(false);
+    setImageToCrop(null);
+  };
+
   const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -789,9 +818,20 @@ export default function App() {
                         <User size={40} className="text-white" />
                       )}
                     </div>
-                    <div className="absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2 rounded-xl shadow-lg cursor-pointer hover:scale-110 transition-transform">
-                      <Camera size={16} />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12"
+                    >
+                      <Camera size={18} strokeWidth={2.5} />
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept="image/*"
+                      className="hidden"
+                    />
                   </div>
                   <div className="text-center">
                     <h2 className="text-white text-xl font-bold tracking-tight leading-none">{userProfile?.name || 'Seu Nome'}</h2>
@@ -836,7 +876,14 @@ export default function App() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                       <Camera size={14} /> URL da Foto de Perfil
                     </label>
-                    <input name="photoUrl" defaultValue={userProfile?.photoUrl} type="url" placeholder="https://link-da-sua-foto.jpg" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    <input
+                      name="photoUrl"
+                      value={userProfile?.photoUrl || ''}
+                      onChange={(e) => setUserProfile(prev => prev ? { ...prev, photoUrl: e.target.value } : null)}
+                      type="text"
+                      placeholder="https://link-da-sua-foto.jpg ou Upload..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                    />
                   </div>
 
                   <div className="pt-4 flex gap-3">
@@ -1520,6 +1567,17 @@ export default function App() {
           )}
 
         </main>
+      )}
+
+      {isCropping && imageToCrop && (
+        <ImageCropperModal
+          image={imageToCrop}
+          onCropComplete={onCropComplete}
+          onCancel={() => {
+            setIsCropping(false);
+            setImageToCrop(null);
+          }}
+        />
       )}
 
       <Footer />
