@@ -238,7 +238,8 @@ export default function App() {
     setIsLoading(true);
     try {
       // Fetch Events
-      const { data: eventsData } = await supabase.from('events').select('*');
+      const { data: eventsData, error: eError } = await supabase.from('events').select('*');
+      if (eError) console.error('Supabase: Erro ao buscar eventos:', eError);
       if (eventsData) {
         setEvents(eventsData.map(e => ({
           ...e,
@@ -247,7 +248,8 @@ export default function App() {
       }
 
       // Fetch Conductors
-      const { data: condData } = await supabase.from('conductors').select('*');
+      const { data: condData, error: cError } = await supabase.from('conductors').select('*');
+      if (cError) console.error('Supabase: Erro ao buscar encarregados:', cError);
       if (condData) {
         setConductors(condData.map(c => ({
           ...c,
@@ -256,7 +258,8 @@ export default function App() {
       }
 
       // Fetch Congregations
-      const { data: congData } = await supabase.from('congregations').select('*, service_days(*), ministry(*)');
+      const { data: congData, error: cgError } = await supabase.from('congregations').select('*, service_days(*), ministry(*)');
+      if (cgError) console.error('Supabase: Erro ao buscar congregações:', cgError);
       if (congData) {
         setCongregations(congData.map(c => ({
           ...c,
@@ -266,7 +269,8 @@ export default function App() {
       }
 
       // Fetch Presences
-      const { data: presData } = await supabase.from('presences').select('*');
+      const { data: presData, error: pError } = await supabase.from('presences').select('*');
+      if (pError) console.error('Supabase: Erro ao buscar presenças:', pError);
       if (presData) {
         setPresences(presData.map(p => ({
           ...p,
@@ -275,7 +279,7 @@ export default function App() {
         })));
       }
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Erro geral ao carregar dados:', error);
     } finally {
       setIsLoading(false);
     }

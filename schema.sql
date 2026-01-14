@@ -62,10 +62,39 @@ CREATE TABLE IF NOT EXISTS presences (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Enable RLS (Optional, can be configured later)
--- ALTER TABLE events ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE conductors ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE congregations ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE service_days ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE ministry ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE presences ENABLE ROW LEVEL SECURITY;
+-- Enable RLS and add public policies
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Events" ON events FOR SELECT USING (true);
+CREATE POLICY "Public Insert Events" ON events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Events" ON events FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Events" ON events FOR DELETE USING (true);
+
+ALTER TABLE conductors ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Conductors" ON conductors FOR SELECT USING (true);
+CREATE POLICY "Public Insert Conductors" ON conductors FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Conductors" ON conductors FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Conductors" ON conductors FOR DELETE USING (true);
+
+ALTER TABLE congregations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Congregations" ON congregations FOR SELECT USING (true);
+CREATE POLICY "Public Insert Congregations" ON congregations FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Congregations" ON congregations FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Congregations" ON congregations FOR DELETE USING (true);
+
+ALTER TABLE service_days ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Service Days" ON service_days FOR SELECT USING (true);
+CREATE POLICY "Public Insert Service Days" ON service_days FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Service Days" ON service_days FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Service Days" ON service_days FOR DELETE USING (true);
+
+ALTER TABLE ministry ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Ministry" ON ministry FOR SELECT USING (true);
+CREATE POLICY "Public Insert Ministry" ON ministry FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Ministry" ON ministry FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Ministry" ON ministry FOR DELETE USING (true);
+
+ALTER TABLE presences ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Read Presences" ON presences FOR SELECT USING (true);
+CREATE POLICY "Public Insert Presences" ON presences FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Presences" ON presences FOR UPDATE USING (true);
+CREATE POLICY "Public Delete Presences" ON presences FOR DELETE USING (true);
