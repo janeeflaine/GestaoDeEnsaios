@@ -1337,9 +1337,9 @@ export default function App() {
                   <p className="text-slate-500 font-medium">Gestão centralizada do sistema 2026.</p>
                 </div>
 
-                {/* Sub-menu with yellow accent and horizontal scroll awareness */}
+                {/* Professional Sub-menu with horizontal scroll awareness */}
                 <div className="relative">
-                  <div className="bg-white border-2 border-amber-400 p-1.5 rounded-[1.5rem] shadow-xl shadow-amber-900/5 flex overflow-x-auto no-scrollbar gap-1 w-full">
+                  <div className="bg-white border border-slate-100 p-1.5 rounded-[1.5rem] shadow-sm flex overflow-x-auto no-scrollbar gap-1 w-full">
                     <button
                       onClick={() => setAdminSubTab('events')}
                       className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'events' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
