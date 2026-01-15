@@ -2421,8 +2421,10 @@ export default function App() {
           )}
 
           {/* EDIT MEMBER MODAL */}
+          {(() => { console.log('Modal condition check:', { isMemberModalOpen, memberToEdit }); return null; })()}
           {isMemberModalOpen && memberToEdit && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+              {(() => { console.log('MODAL IS RENDERING!'); return null; })()}
               <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
                 <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
                   <div>
