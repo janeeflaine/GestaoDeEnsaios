@@ -27,25 +27,23 @@ const getFriendlyEventName = (type: EventType) => {
 // --- Sub-components ---
 
 const DashboardStatCard: React.FC<{ title: string; total: number; remaining: number; icon: React.ReactNode; iconBg: string }> = ({ title, total, remaining, icon, iconBg }) => (
-  <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-4 min-w-[240px] flex-1 hover:translate-y-[-4px] transition-all group">
-    <div className="flex justify-between items-start">
-      <div className={`${iconBg} p-3.5 rounded-2xl text-white shadow-lg shadow-${iconBg.split('-')[1]}-200 animate-in zoom-in-50 duration-500`}>
+  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col gap-6 min-w-[260px] flex-1 transition-all hover:shadow-2xl hover:-translate-y-1">
+    <div className="flex items-center gap-4">
+      <div className={`${iconBg} p-4 rounded-[1.25rem] text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
         {icon}
       </div>
-      <div className="text-right">
-        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] mb-0.5">{title}</p>
-        <div className="flex items-baseline justify-end gap-1.5">
-          <span className="text-3xl font-black text-slate-900 tracking-tighter">{remaining}</span>
-          <span className="text-slate-300 font-bold text-xs uppercase tracking-widest">restantes</span>
-        </div>
-      </div>
+      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight">{title}</h3>
     </div>
 
-    <div className="h-px bg-slate-100 w-full"></div>
-
-    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-      <span className="text-slate-400">Total no ano</span>
-      <span className="text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">{total}</span>
+    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+      <div className="flex flex-col">
+        <span className="text-4xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
+        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.15em] mt-2">Restantes</span>
+      </div>
+      <div className="flex flex-col border-l border-slate-100 pl-6">
+        <span className="text-4xl font-black text-slate-200 tracking-tighter leading-none">{total}</span>
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mt-2">Total Anual</span>
+      </div>
     </div>
   </div>
 );
@@ -698,9 +696,9 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="px-4 -mt-16 relative z-20">
+              <div className="px-6 -mt-16 relative z-20">
                 <div className="max-w-7xl mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     <DashboardStatCard
                       title="Total Geral de Eventos"
                       total={stats.total.total}
