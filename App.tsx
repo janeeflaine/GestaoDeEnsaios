@@ -27,22 +27,22 @@ const getFriendlyEventName = (type: EventType) => {
 // --- Sub-components ---
 
 const DashboardStatCard: React.FC<{ title: string; total: number; remaining: number; icon: React.ReactNode; iconBg: string }> = ({ title, total, remaining, icon, iconBg }) => (
-  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col gap-6 min-w-[260px] flex-1 transition-all hover:shadow-2xl hover:-translate-y-1">
-    <div className="flex items-center gap-4">
-      <div className={`${iconBg} p-4 rounded-[1.25rem] text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
+  <div className="bg-white p-6 md:p-5 rounded-[2.5rem] md:rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row gap-6 md:gap-10 items-stretch md:items-center transition-all hover:shadow-2xl hover:-translate-y-1 group">
+    <div className="flex items-center gap-4 md:flex-1">
+      <div className={`${iconBg} p-4 md:p-3 rounded-2xl md:rounded-xl text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
         {icon}
       </div>
-      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight">{title}</h3>
+      <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight flex-1">{title}</h3>
     </div>
 
-    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-      <div className="flex flex-col">
-        <span className="text-4xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
-        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.15em] mt-2">Restantes</span>
+    <div className="grid grid-cols-2 md:flex md:items-center gap-4 md:gap-16 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-slate-50 md:border-slate-100 md:pl-12">
+      <div className="flex flex-col md:items-center min-w-[80px]">
+        <span className="text-4xl md:text-3xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
+        <span className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase tracking-[0.15em] mt-2 md:mt-1 font-bold">Restantes</span>
       </div>
-      <div className="flex flex-col border-l border-slate-100 pl-6">
-        <span className="text-4xl font-black text-slate-200 tracking-tighter leading-none">{total}</span>
-        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] mt-2">Total Anual</span>
+      <div className="flex flex-col md:items-center border-l border-slate-100 md:border-l-0 pl-6 md:pl-0 min-w-[80px]">
+        <span className="text-4xl md:text-3xl font-black text-slate-200 tracking-tighter leading-none group-hover:text-slate-300 transition-colors">{total}</span>
+        <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mt-2 md:mt-1 whitespace-nowrap font-bold">Total Anual</span>
       </div>
     </div>
   </div>
@@ -679,7 +679,7 @@ export default function App() {
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
             <div className="animate-in fade-in duration-500">
-              <div className="bg-indigo-600 pt-16 pb-28 px-4 text-center relative overflow-hidden">
+              <div className="bg-indigo-600 pt-16 pb-40 px-4 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-10 pointer-events-none">
                   <div className="absolute -top-10 -left-10 w-64 h-64 rounded-full border-[20px] border-white"></div>
                   <div className="absolute bottom-10 right-10 w-96 h-96 rounded-full border-[30px] border-white"></div>
@@ -693,12 +693,23 @@ export default function App() {
                   <p className="text-indigo-100 font-medium text-sm md:text-base max-w-md mx-auto">
                     Confirme sua presença e adicione os ensaios ao seu Google Calendar com apenas um clique.
                   </p>
+
+                  <div className="mt-10 max-w-2xl mx-auto relative group">
+                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-white transition-colors" size={20} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por local ou encarregado..."
+                      value={globalSearch}
+                      onChange={(e) => setGlobalSearch(e.target.value)}
+                      className="w-full bg-white/10 border border-white/10 backdrop-blur-xl rounded-full py-5 pl-16 pr-6 text-white outline-none focus:ring-8 focus:ring-white/5 focus:border-white/20 transition-all font-medium placeholder:text-white/30 text-lg shadow-2xl"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="px-6 -mt-16 relative z-20">
-                <div className="max-w-7xl mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                <div className="max-w-6xl mx-auto space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                     <DashboardStatCard
                       title="Total Geral de Eventos"
                       total={stats.total.total}
@@ -713,6 +724,8 @@ export default function App() {
                       icon={<Calendar size={20} />}
                       iconBg="bg-indigo-500"
                     />
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                     <DashboardStatCard
                       title="Batismos Efetuados"
                       total={stats.baptisms.total}
@@ -735,19 +748,6 @@ export default function App() {
                       iconBg="bg-purple-500"
                     />
                   </div>
-                </div>
-              </div>
-
-              <div className="px-4 mt-8 max-w-2xl mx-auto">
-                <div className="relative group">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Buscar por local ou encarregado..."
-                    value={globalSearch}
-                    onChange={(e) => setGlobalSearch(e.target.value)}
-                    className="w-full bg-white border border-slate-100 shadow-sm rounded-full py-5 pl-14 pr-6 text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                  />
                 </div>
               </div>
 
