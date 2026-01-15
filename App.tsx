@@ -128,7 +128,7 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void }>
             rel="noopener noreferrer"
             className="w-full md:w-fit bg-white/20 hover:bg-white/30 text-white px-5 py-3 md:py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all backdrop-blur-sm border border-white/10"
           >
-            <CalendarPlus size={16} /> Google Calendar
+            <CalendarPlus size={16} /> Google Agenda
           </a>
           <button
             onClick={onConfirm}
@@ -707,6 +707,14 @@ export default function App() {
     }
   };
 
+  const deleteEvent = async (id: string) => {
+    if (confirm('Deseja realmente excluir este evento? Esta ação não pode ser desfeita.')) {
+      const { error } = await supabase.from('events').delete().eq('id', id);
+      if (!error) await fetchInitialData();
+      else alert('Erro ao excluir evento: ' + error.message);
+    }
+  };
+
   const toggleCancelEvent = async (event: RehearsalEvent) => {
     const { error } = await supabase.from('events').update({ canceled: !event.canceled }).eq('id', event.id);
     if (!error) await fetchInitialData();
@@ -748,7 +756,7 @@ export default function App() {
                   </div>
                   <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">Calendário de Ensaios 2026</h1>
                   <p className="text-indigo-100 font-medium text-sm md:text-base max-w-md mx-auto">
-                    Confirme sua presença e adicione os ensaios ao seu Google Calendar com apenas um clique.
+                    Confirme sua presença e adicione os ensaio ao seu Google Agenda com apenas um clique.
                   </p>
 
                   <div className="mt-10 max-w-2xl mx-auto relative group">
@@ -1195,6 +1203,9 @@ export default function App() {
                                   </button>
                                   <button onClick={() => { setSelectedEvent(event); setIsCreatingEvent(true); }} className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all">
                                     <Edit2 size={18} />
+                                  </button>
+                                  <button onClick={() => deleteEvent(event.id)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
+                                    <Trash2 size={18} />
                                   </button>
                                 </div>
                               </td>
