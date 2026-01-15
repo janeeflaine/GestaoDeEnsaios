@@ -26,14 +26,26 @@ const getFriendlyEventName = (type: EventType) => {
 
 // --- Sub-components ---
 
-const DashboardStatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; iconBg: string }> = ({ title, value, icon, iconBg }) => (
-  <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-50 flex justify-between items-center min-w-[200px] flex-1">
-    <div>
-      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1">{title}</p>
-      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{value}</h3>
+const DashboardStatCard: React.FC<{ title: string; total: number; remaining: number; icon: React.ReactNode; iconBg: string }> = ({ title, total, remaining, icon, iconBg }) => (
+  <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col gap-4 min-w-[240px] flex-1 hover:translate-y-[-4px] transition-all group">
+    <div className="flex justify-between items-start">
+      <div className={`${iconBg} p-3.5 rounded-2xl text-white shadow-lg shadow-${iconBg.split('-')[1]}-200 animate-in zoom-in-50 duration-500`}>
+        {icon}
+      </div>
+      <div className="text-right">
+        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.15em] mb-0.5">{title}</p>
+        <div className="flex items-baseline justify-end gap-1.5">
+          <span className="text-3xl font-black text-slate-900 tracking-tighter">{remaining}</span>
+          <span className="text-slate-300 font-bold text-xs uppercase tracking-widest">restantes</span>
+        </div>
+      </div>
     </div>
-    <div className={`${iconBg} p-3 rounded-xl text-white shadow-sm`}>
-      {icon}
+
+    <div className="h-px bg-slate-100 w-full"></div>
+
+    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+      <span className="text-slate-400">Total no ano</span>
+      <span className="text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">{total}</span>
     </div>
   </div>
 );
@@ -342,19 +354,21 @@ export default function App() {
 
   const stats = useMemo(() => {
     const activeEvents = events.filter(e => !e.canceled);
-    const total = activeEvents.length;
-    const regionals = activeEvents.filter(e => e.type === EventType.REGIONAL);
-    const locals = activeEvents.filter(e => e.type === EventType.LOCAL);
 
-    const remainingRegionals = regionals.filter(e => e.fullDate >= today).length;
-    const remainingLocals = locals.filter(e => e.fullDate >= today).length;
+    const countStats = (types: EventType[]) => {
+      const filtered = activeEvents.filter(e => types.includes(e.type));
+      return {
+        total: filtered.length,
+        remaining: filtered.filter(e => e.fullDate >= today).length
+      };
+    };
 
     return {
-      total,
-      regionals: regionals.length,
-      remainingRegionals,
-      locals: locals.length,
-      remainingLocals,
+      total: countStats(Object.values(EventType)),
+      rehearsals: countStats([EventType.LOCAL, EventType.REGIONAL]),
+      baptisms: countStats([EventType.BATISMO]),
+      youth: countStats([EventType.REUNIAO_MOCIDADE]),
+      gifts: countStats([EventType.BUSCA_DONS]),
       presences: presences.length
     };
   }, [events, today, presences]);
@@ -685,31 +699,44 @@ export default function App() {
               </div>
 
               <div className="px-4 -mt-16 relative z-20">
-                <div className="flex flex-wrap gap-4 justify-center">
-                  <DashboardStatCard
-                    title="Total de Ensaios"
-                    value={stats.total}
-                    icon={<Calendar size={20} />}
-                    iconBg="bg-indigo-500"
-                  />
-                  <DashboardStatCard
-                    title="Regionais Restantes"
-                    value={stats.remainingRegionals}
-                    icon={<Sparkles size={20} />}
-                    iconBg="bg-amber-500"
-                  />
-                  <DashboardStatCard
-                    title="Locais Restantes"
-                    value={stats.remainingLocals}
-                    icon={<MapPin size={20} />}
-                    iconBg="bg-emerald-500"
-                  />
-                  <DashboardStatCard
-                    title="Confirmações"
-                    value={stats.presences}
-                    icon={<Users size={20} />}
-                    iconBg="bg-rose-500"
-                  />
+                <div className="max-w-7xl mx-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <DashboardStatCard
+                      title="Total Geral de Eventos"
+                      total={stats.total.total}
+                      remaining={stats.total.remaining}
+                      icon={<CalendarPlus size={20} />}
+                      iconBg="bg-slate-800"
+                    />
+                    <DashboardStatCard
+                      title="Ensaios (Local/Reg)"
+                      total={stats.rehearsals.total}
+                      remaining={stats.rehearsals.remaining}
+                      icon={<Calendar size={20} />}
+                      iconBg="bg-indigo-500"
+                    />
+                    <DashboardStatCard
+                      title="Batismos Efetuados"
+                      total={stats.baptisms.total}
+                      remaining={stats.baptisms.remaining}
+                      icon={<Droplets size={20} />}
+                      iconBg="bg-sky-500"
+                    />
+                    <DashboardStatCard
+                      title="Reuniões Mocidade"
+                      total={stats.youth.total}
+                      remaining={stats.youth.remaining}
+                      icon={<Users size={20} />}
+                      iconBg="bg-rose-500"
+                    />
+                    <DashboardStatCard
+                      title="Busca de Dons"
+                      total={stats.gifts.total}
+                      remaining={stats.gifts.remaining}
+                      icon={<Sparkles size={20} />}
+                      iconBg="bg-purple-500"
+                    />
+                  </div>
                 </div>
               </div>
 
