@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+// FORCE_RELOAD_TEST_TIMESTAMP: 1768503028047
 import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
 import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole } from './types';
 import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
@@ -301,6 +302,17 @@ export default function App() {
   const [editingCategory, setEditingCategory] = useState<CongregationCategory | null>(null);
   const [editingRole, setEditingRole] = useState<MinistryRole | null>(null);
 
+  // Profile Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    instrument: 'Violino',
+    congregation: '',
+    congregationId: '',
+    photoUrl: ''
+  });
+  const [showSuccess, setShowSuccess] = useState(false);
+
   // Photo Upload State
   const [isCropping, setIsCropping] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -338,9 +350,29 @@ export default function App() {
       .single();
 
     if (!error && data) {
-      setUserProfile({
+      const profile = {
         ...data,
-        photoUrl: data.photo_url // Map snake_case from DB to camelCase in app
+        photoUrl: data.photo_url
+      };
+      setUserProfile(profile);
+      setFormData({
+        name: profile.name || '',
+        phone: profile.phone || '',
+        instrument: profile.instrument || 'Violino',
+        congregation: profile.congregation || '',
+        congregationId: profile.congregation_id || '',
+        photoUrl: profile.photoUrl || ''
+      });
+    } else {
+      // If profile doesn't exist, initialize from session metadata if possible
+      const metadata = session?.user?.user_metadata;
+      setFormData({
+        name: metadata?.name || '',
+        phone: '',
+        instrument: metadata?.instrument || 'Violino',
+        congregation: '',
+        congregationId: '',
+        photoUrl: ''
       });
     }
   };
@@ -375,7 +407,9 @@ export default function App() {
 
       // Fetch Congregations
       const { data: congData, error: cgError } = await supabase.from('congregations').select('*, service_days(*), ministry(*)');
-      if (cgError) console.error('Supabase: Erro ao buscar congregações:', cgError);
+      if (cgError) {
+        console.error('Supabase: Erro ao buscar congregações:', cgError);
+      }
       if (congData) {
         setCongregations(congData.map(c => ({
           ...c,
@@ -416,7 +450,14 @@ export default function App() {
   // Real Current Date
   const today = new Date();
 
-  const congregationList = useMemo(() => congregations.map(c => c.name).sort(), [congregations]);
+  const congregationList = useMemo(() => {
+    const list = congregations.map(c => c.name);
+    // Ensure the user's current congregation is in the list if it exists
+    if (userProfile?.congregation && !list.includes(userProfile.congregation)) {
+      list.push(userProfile.congregation);
+    }
+    return [...new Set(list)].sort();
+  }, [congregations, userProfile?.congregation]);
 
   const dashboardData = useMemo(() => {
     let futureEvents = events.filter(e => e.fullDate >= today && !e.canceled).sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
@@ -663,33 +704,41 @@ export default function App() {
 
   const onCropComplete = (croppedImage: string) => {
     setUserProfile(prev => prev ? { ...prev, photoUrl: croppedImage } : {
+      id: '', // Add required id
+      role: 'USER', // Add required role
       name: '',
       email: '',
       phone: '',
       instrument: 'Violino',
-      photoUrl: croppedImage
+      photoUrl: croppedImage,
+      congregation: '' // Add default
     });
+    setFormData(prev => ({ ...prev, photoUrl: croppedImage }));
     setIsCropping(false);
     setImageToCrop(null);
   };
 
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isGuest || !userProfile) {
+    console.log('Salvando perfil...', formData);
+    if (isGuest || !session?.user) {
       alert('Faça login para salvar seu perfil permanentemente.');
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+    const userId = session.user.id;
+    const userEmail = session.user.email;
+
     const profileToSave = {
-      id: userProfile.id,
-      email: userProfile.email,
-      name: formData.get('name') as string,
-      phone: formData.get('phone') as string,
-      instrument: formData.get('instrument') as string,
-      congregation: formData.get('congregation') as string,
-      photo_url: userProfile.photoUrl,
-      role: userProfile.role
+      id: userId,
+      email: userEmail,
+      name: formData.name,
+      phone: formData.phone,
+      instrument: formData.instrument,
+      congregation: formData.congregation,
+      congregation_id: formData.congregationId,
+      photo_url: formData.photoUrl,
+      role: userProfile?.role || 'USER'
     };
 
     const { error } = await supabase
@@ -703,16 +752,31 @@ export default function App() {
         name: profileToSave.name,
         phone: profileToSave.phone,
         instrument: profileToSave.instrument,
-        congregation: profileToSave.congregation
+        congregation: profileToSave.congregation,
+        congregationId: profileToSave.congregation_id,
+        photoUrl: profileToSave.photo_url
       });
-      alert('Perfil atualizado com sucesso!');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
     }
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setIsGuest(false);
-    setActiveTab('dashboard');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Erro ao sair:', error.message);
+        // Mesmo com erro no server, forçamos a limpeza local
+      }
+    } catch (err) {
+      console.error('Erro inesperado no logout:', err);
+    } finally {
+      // Limpeza garantida do estado local
+      setSession(null);
+      setUserProfile(null);
+      setIsGuest(false);
+      setActiveTab('dashboard');
+    }
   };
 
   const deleteConductor = async (id: string) => {
@@ -1065,7 +1129,7 @@ export default function App() {
             <div className="px-4 mt-8 space-y-8 animate-in slide-in-from-top-4 duration-500 max-w-2xl mx-auto pb-12">
               <header className="text-center space-y-2">
                 <h1 className="text-3xl font-black text-slate-800 tracking-tight">Meu Perfil</h1>
-                <p className="text-slate-500 font-medium">Mantenha seus dados atualizados para confirmações rápidas.</p>
+                <p className="text-slate-500 font-medium">Mantenha seus dados atualizados para sincronização automática.</p>
               </header>
 
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
@@ -1117,26 +1181,52 @@ export default function App() {
                       <p className="text-xs font-medium text-amber-700">Como visitante, suas edições no perfil não serão salvas. <button onClick={() => setIsGuest(false)} className="underline font-black">Crie uma conta</button> para gerenciar seu perfil musical.</p>
                     </div>
                   )}
+
+                  {showSuccess && (
+                    <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3 mb-4 animate-in slide-in-from-top-2">
+                      <CheckCircle className="text-emerald-500" size={20} />
+                      <p className="text-xs font-bold text-emerald-700">Perfil atualizado com sucesso!</p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                         <User size={14} /> Nome Completo
                       </label>
-                      <input required name="name" defaultValue={userProfile?.name} type="text" placeholder="Como quer ser chamado?" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                      <input
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        type="text"
+                        placeholder="Como quer ser chamado?"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      />
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                         <Phone size={14} /> WhatsApp
                       </label>
-                      <input required name="phone" defaultValue={userProfile?.phone} type="tel" placeholder="(00) 00000-0000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                      <input
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        type="tel"
+                        placeholder="(00) 00000-0000"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      />
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                         <Music size={14} /> Instrumento Principal
                       </label>
-                      <select name="instrument" defaultValue={userProfile?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                      <select
+                        value={formData.instrument}
+                        onChange={(e) => setFormData({ ...formData, instrument: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      >
                         {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
                       </select>
                     </div>
@@ -1145,7 +1235,27 @@ export default function App() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                         <MapPin size={14} /> Congregação Comum
                       </label>
-                      <input name="congregation" defaultValue={userProfile?.congregation} type="text" placeholder="Sua congregação" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                      <select
+                        value={formData.congregationId}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          const selected = congregations.find(c => c.id === id);
+                          setFormData({
+                            ...formData,
+                            congregationId: id,
+                            congregation: selected ? selected.name : ''
+                          });
+                        }}
+                        className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold appearance-none cursor-pointer"
+                        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'org.lucide.chevron-down\' /%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1.25rem center', backgroundSize: '1.5rem' }}
+                      >
+                        <option value="">Selecione sua congregação...</option>
+                        {congregations.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -1154,9 +1264,8 @@ export default function App() {
                       <Camera size={14} /> URL da Foto de Perfil
                     </label>
                     <input
-                      name="photoUrl"
-                      value={userProfile?.photoUrl || ''}
-                      onChange={(e) => setUserProfile(prev => prev ? { ...prev, photoUrl: e.target.value } : null)}
+                      value={formData.photoUrl}
+                      onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
                       type="text"
                       placeholder="https://link-da-sua-foto.jpg ou Upload..."
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
@@ -1165,8 +1274,13 @@ export default function App() {
 
                   <div className="pt-4 flex gap-3">
                     {!isGuest && (
-                      <button type="submit" className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        Salvar Perfil <CheckCircle size={20} />
+                      <button
+                        type="submit"
+                        disabled={showSuccess}
+                        className={`flex-1 font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all ${showSuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                      >
+                        {showSuccess ? 'Perfil Salvo!' : 'Salvar Perfil'}
+                        <CheckCircle size={20} className={showSuccess ? 'animate-bounce' : ''} />
                       </button>
                     )}
                     <button

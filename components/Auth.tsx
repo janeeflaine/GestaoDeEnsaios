@@ -30,7 +30,7 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                 });
                 if (error) throw error;
             } else {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -42,7 +42,14 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                     }
                 });
                 if (error) throw error;
-                alert('Cadastro realizado! Verifique seu e-mail para confirmar.');
+
+                if (data.session) {
+                    // Auto-login successful (Email confirmation is disabled)
+                    return;
+                } else {
+                    // Email confirmation is required
+                    alert('Cadastro realizado! Por favor, verifique seu e-mail para confirmar a conta e poder fazer login.');
+                }
             }
         } catch (error: any) {
             alert(error.message);

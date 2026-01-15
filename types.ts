@@ -26,6 +26,7 @@ export interface UserProfile {
   phone: string;
   instrument: string;
   congregation: string;
+  congregationId: string;
   photoUrl: string;
   role: UserRole;
 }
