@@ -120,13 +120,23 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void }>
           </div>
         </div>
 
-        {/* Action Button - Balanced */}
-        <button
-          onClick={onConfirm}
-          className="w-full md:w-fit md:ml-auto bg-white text-slate-900 px-6 py-3.5 md:py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-100 hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-        >
-          Confirmar presença <ChevronRight size={16} />
-        </button>
+        {/* Action Buttons - Balanced */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 md:ml-auto w-full md:w-fit">
+          <a
+            href={getGoogleCalendarUrl(event)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full md:w-fit bg-white/20 hover:bg-white/30 text-white px-5 py-3 md:py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all backdrop-blur-sm border border-white/10"
+          >
+            <CalendarPlus size={16} /> Google Calendar
+          </a>
+          <button
+            onClick={onConfirm}
+            className="w-full md:w-fit bg-white text-slate-900 px-6 py-3.5 md:py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-100 hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+          >
+            Confirmar presença <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Decorative Orbs */}
@@ -806,7 +816,7 @@ export default function App() {
               <div className="px-4 mt-12 space-y-12 max-w-5xl mx-auto pb-12">
                 <div className="space-y-6">
                   <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Sparkles size={20} className="text-amber-500" /> Próximos Ensaios em Destaque
+                    <Sparkles size={20} className="text-amber-500" /> Próximos Eventos em Destaque
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {dashboardData.largeEvents.length > 0 ? (
