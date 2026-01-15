@@ -88,38 +88,50 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void }>
   const eventName = getFriendlyEventName(event.type);
 
   return (
-    <section className={`rounded-[2.5rem] p-6 text-white relative overflow-hidden shadow-xl transition-all duration-500 ${styles.card}`}>
-      <div className="relative z-10 space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-            <Calendar size={16} />
+    <section className={`rounded-[2.5rem] p-5 md:p-6 text-white relative overflow-hidden shadow-xl transition-all duration-500 ${styles.card}`}>
+      <div className="relative z-10 space-y-3 md:space-y-4">
+        {/* Header - Compact */}
+        <div className="flex items-center gap-2 opacity-90">
+          <div className="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+            <Calendar size={14} />
           </div>
-          <h2 className="text-sm font-bold uppercase tracking-wider">{eventName}</h2>
+          <h2 className="text-[10px] md:text-sm font-bold uppercase tracking-wider">{eventName}</h2>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-4 rounded-3xl w-fit text-center min-w-[90px] shadow-lg">
-            <span className="block text-3xl font-black tracking-tighter">{event.day.split(' ')[0]}</span>
-            <span className="text-[10px] uppercase font-bold tracking-[0.2em] opacity-80">{event.month}</span>
+        {/* Content - Horizontal on Mobile */}
+        <div className="flex items-center gap-4 md:gap-6">
+          {/* Date Block */}
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-3 md:p-4 rounded-2xl md:rounded-3xl text-center min-w-[75px] md:min-w-[90px] shadow-lg flex-shrink-0">
+            <span className="block text-2xl md:text-3xl font-black tracking-tighter leading-none">{event.day.split(' ')[0]}</span>
+            <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-[0.15em] opacity-80 mt-1 block">{event.month}</span>
           </div>
-          <div className="space-y-1">
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none">Local do Evento</p>
-            <h3 className="text-2xl font-black tracking-tight leading-tight">{event.location}</h3>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm">{event.time}</span>
-              <span className="flex items-center gap-1 text-[10px] opacity-80"><User size={12} /> {event.conductor}</span>
+
+          {/* Info Block */}
+          <div className="flex-1 min-w-0 space-y-1">
+            <h3 className="text-xl md:text-2xl font-black tracking-tight leading-tight truncate">{event.location}</h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-1 text-[11px] font-bold">
+                <Clock size={12} className="opacity-60" /> {event.time}
+              </span>
+              <span className="flex items-center gap-1 text-[11px] opacity-80 truncate max-w-[120px]">
+                <User size={12} className="opacity-60" /> {event.conductor}
+              </span>
             </div>
           </div>
-          <button
-            onClick={onConfirm}
-            className="mt-2 sm:mt-0 sm:ml-auto bg-white text-slate-900 px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-100 hover:scale-105 active:scale-95 transition-all shadow-xl"
-          >
-            Confirmar <ChevronRight size={16} />
-          </button>
         </div>
+
+        {/* Action Button - Balanced */}
+        <button
+          onClick={onConfirm}
+          className="w-full md:w-fit md:ml-auto bg-white text-slate-900 px-6 py-3.5 md:py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-100 hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+        >
+          Confirmar presença <ChevronRight size={16} />
+        </button>
       </div>
-      <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-[60px]"></div>
-      <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/10 rounded-full blur-[60px]"></div>
+
+      {/* Decorative Orbs */}
+      <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-[60px] pointer-events-none"></div>
+      <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/10 rounded-full blur-[60px] pointer-events-none"></div>
     </section>
   );
 };
