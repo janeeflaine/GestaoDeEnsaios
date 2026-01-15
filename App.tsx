@@ -297,6 +297,10 @@ export default function App() {
   const [tempServiceDays, setTempServiceDays] = useState<ServiceDay[]>([]);
   const [tempMinistry, setTempMinistry] = useState<Ministry[]>([]);
 
+  // Editing configurations
+  const [editingCategory, setEditingCategory] = useState<CongregationCategory | null>(null);
+  const [editingRole, setEditingRole] = useState<MinistryRole | null>(null);
+
   // Photo Upload State
   const [isCropping, setIsCropping] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -730,9 +734,17 @@ export default function App() {
   // --- Config CRUD Functions ---
   const addCategory = async (name: string) => {
     if (!name) return;
-    const { error } = await supabase.from('congregation_categories').insert({ name });
-    if (!error) await fetchInitialData();
-    else alert('Erro ao adicionar categoria: ' + error.message);
+    if (editingCategory) {
+      const { error } = await supabase.from('congregation_categories').update({ name }).eq('id', editingCategory.id);
+      if (!error) {
+        setEditingCategory(null);
+        await fetchInitialData();
+      } else alert('Erro ao atualizar categoria: ' + error.message);
+    } else {
+      const { error } = await supabase.from('congregation_categories').insert({ name });
+      if (!error) await fetchInitialData();
+      else alert('Erro ao adicionar categoria: ' + error.message);
+    }
   };
 
   const deleteCategory = async (id: number) => {
@@ -745,9 +757,17 @@ export default function App() {
 
   const addRole = async (name: string) => {
     if (!name) return;
-    const { error } = await supabase.from('ministry_roles').insert({ name });
-    if (!error) await fetchInitialData();
-    else alert('Erro ao adicionar cargo: ' + error.message);
+    if (editingRole) {
+      const { error } = await supabase.from('ministry_roles').update({ name }).eq('id', editingRole.id);
+      if (!error) {
+        setEditingRole(null);
+        await fetchInitialData();
+      } else alert('Erro ao atualizar cargo: ' + error.message);
+    } else {
+      const { error } = await supabase.from('ministry_roles').insert({ name });
+      if (!error) await fetchInitialData();
+      else alert('Erro ao adicionar cargo: ' + error.message);
+    }
   };
 
   const deleteRole = async (id: number) => {
@@ -1413,17 +1433,41 @@ export default function App() {
                         addCategory(name);
                         e.currentTarget.reset();
                       }} className="flex gap-2">
-                        <input name="catName" required type="text" placeholder="Ex: CENTRAL" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" />
-                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">ADD</button>
+                        <input
+                          key={editingCategory?.id || 'new'}
+                          name="catName"
+                          required
+                          type="text"
+                          defaultValue={editingCategory?.name || ''}
+                          placeholder="Ex: CENTRAL"
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                        />
+                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase">
+                          {editingCategory ? 'Salvar' : 'ADD'}
+                        </button>
+                        {editingCategory && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingCategory(null)}
+                            className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-slate-200 transition-colors uppercase"
+                          >
+                            X
+                          </button>
+                        )}
                       </form>
 
                       <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
                         {categories.map(cat => (
                           <div key={cat.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
                             <span className="text-sm font-bold text-slate-700">{cat.name}</span>
-                            <button onClick={() => deleteCategory(cat.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                              <X size={14} />
-                            </button>
+                            <div className="flex gap-1">
+                              <button onClick={() => setEditingCategory(cat)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => deleteCategory(cat.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <X size={14} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                         {categories.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhuma categoria cadastrada.</p>}
@@ -1443,17 +1487,41 @@ export default function App() {
                         addRole(name);
                         e.currentTarget.reset();
                       }} className="flex gap-2">
-                        <input name="roleName" required type="text" placeholder="Ex: Ancião" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" />
-                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">ADD</button>
+                        <input
+                          key={editingRole?.id || 'new'}
+                          name="roleName"
+                          required
+                          type="text"
+                          defaultValue={editingRole?.name || ''}
+                          placeholder="Ex: Ancião"
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                        />
+                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase">
+                          {editingRole ? 'Salvar' : 'ADD'}
+                        </button>
+                        {editingRole && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingRole(null)}
+                            className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-slate-200 transition-colors uppercase"
+                          >
+                            X
+                          </button>
+                        )}
                       </form>
 
                       <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
                         {roles.map(r => (
                           <div key={r.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
                             <span className="text-sm font-bold text-slate-700">{r.name}</span>
-                            <button onClick={() => deleteRole(r.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                              <X size={14} />
-                            </button>
+                            <div className="flex gap-1">
+                              <button onClick={() => setEditingRole(r)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => deleteRole(r.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <X size={14} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                         {roles.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum cargo cadastrado.</p>}
