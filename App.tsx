@@ -280,6 +280,8 @@ export default function App() {
   const [selectedCongregation, setSelectedCongregation] = useState<Congregation | null>(null);
 
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isDeletingEvent, setIsDeletingEvent] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<RehearsalEvent | null>(null);
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [isCreatingConductor, setIsCreatingConductor] = useState(false);
   const [isCreatingCongregation, setIsCreatingCongregation] = useState(false);
@@ -707,11 +709,29 @@ export default function App() {
     }
   };
 
-  const deleteEvent = async (id: string) => {
-    if (confirm('Deseja realmente excluir este evento? Esta ação não pode ser desfeita.')) {
-      const { error } = await supabase.from('events').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir evento: ' + error.message);
+  const deleteEvent = (event: RehearsalEvent) => {
+    setEventToDelete(event);
+    setIsDeletingEvent(true);
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (!eventToDelete) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.from('events').delete().eq('id', eventToDelete.id);
+      if (!error) {
+        await fetchInitialData();
+        setIsDeletingEvent(false);
+        setEventToDelete(null);
+      } else {
+        alert('Erro ao excluir evento: ' + error.message);
+      }
+    } catch (err) {
+      console.error('Erro na exclusão:', err);
+      alert('Ocorreu um erro inesperado ao excluir o evento.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1204,7 +1224,7 @@ export default function App() {
                                   <button onClick={() => { setSelectedEvent(event); setIsCreatingEvent(true); }} className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all">
                                     <Edit2 size={18} />
                                   </button>
-                                  <button onClick={() => deleteEvent(event.id)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
+                                  <button onClick={() => deleteEvent(event)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
                                     <Trash2 size={18} />
                                   </button>
                                 </div>
@@ -1752,6 +1772,42 @@ export default function App() {
               </div>
             )
           }
+
+          {/* DELETE CONFIRMATION MODAL */}
+          {isDeletingEvent && eventToDelete && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-8 bg-red-600 text-white text-center">
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tight">Confirmar Exclusão</h3>
+                  <p className="text-white/80 text-sm mt-2">Deseja realmente excluir este evento? Esta ação não pode ser desfeita.</p>
+                </div>
+                <div className="p-8 space-y-3">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Evento</p>
+                    <p className="text-sm font-bold text-slate-800">{getFriendlyEventName(eventToDelete.type)}</p>
+                    <p className="text-xs text-slate-500">{eventToDelete.location} • {eventToDelete.day.split(' ')[0]} {eventToDelete.month}</p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <button
+                      onClick={confirmDeleteEvent}
+                      className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      EXCLUIR AGORA
+                    </button>
+                    <button
+                      onClick={() => { setIsDeletingEvent(false); setEventToDelete(null); }}
+                      className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
+                    >
+                      CANCELAR
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
         </main>
       )}
