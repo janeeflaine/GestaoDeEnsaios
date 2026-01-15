@@ -286,6 +286,10 @@ export default function App() {
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [isCreatingConductor, setIsCreatingConductor] = useState(false);
   const [isCreatingCongregation, setIsCreatingCongregation] = useState(false);
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [memberToEdit, setMemberToEdit] = useState<UserProfile | null>(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<UserProfile | null>(null);
 
   const [creatingEventType, setCreatingEventType] = useState<EventType>(EventType.LOCAL);
 
@@ -894,6 +898,18 @@ export default function App() {
     }
   };
 
+  const handleDeleteMember = async (profile: UserProfile) => {
+    try {
+      const { error } = await supabase.from('profiles').delete().eq('id', profile.id);
+      if (error) throw error;
+      await fetchInitialData();
+      setIsDeletingMember(false);
+      setMemberToDelete(null);
+    } catch (err: any) {
+      alert('Erro ao excluir membro: ' + err.message);
+    }
+  };
+
   if (!session && !isGuest) {
     return <Auth onGuestAccess={() => setIsGuest(true)} />;
   }
@@ -1315,50 +1331,54 @@ export default function App() {
           {/* ADMIN TAB */}
           {activeTab === 'admin' && (
             <div className="px-4 mt-8 space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto mb-12">
-              <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                <div>
+              <header className="space-y-6">
+                <div className="border-l-4 border-indigo-600 pl-4 py-1">
                   <h1 className="text-3xl font-black text-slate-800 tracking-tight">Painel Administrativo</h1>
                   <p className="text-slate-500 font-medium">Gestão centralizada do sistema 2026.</p>
                 </div>
 
-                {/* Organized Sub-menu - Professional Tab System */}
-                <div className="bg-white border border-slate-100 p-1 rounded-2xl shadow-sm flex flex-wrap lg:flex-nowrap gap-1 w-full lg:w-fit overflow-hidden">
-                  <button
-                    onClick={() => setAdminSubTab('events')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'events' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Calendar size={14} /> EVENTOS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('congregations')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'congregations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Landmark size={14} /> CONGREGAÇÕES
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('conductors')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'conductors' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Users size={14} /> ENCARREGADOS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('confirmations')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'confirmations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <CheckCircle size={14} /> CONFIRMAÇÕES
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('users')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <UserPlus size={14} /> MEMBROS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('settings')}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Settings size={14} /> CONFIGS
-                  </button>
+                {/* Sub-menu with yellow accent and horizontal scroll awareness */}
+                <div className="relative">
+                  <div className="bg-white border-2 border-amber-400 p-1.5 rounded-[1.5rem] shadow-xl shadow-amber-900/5 flex overflow-x-auto no-scrollbar gap-1 w-full">
+                    <button
+                      onClick={() => setAdminSubTab('events')}
+                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'events' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Calendar size={14} /> EVENTOS
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab('congregations')}
+                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'congregations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Landmark size={14} /> CONGREGAÇÕES
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab('conductors')}
+                      className={`flex-none min-w-[140px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'conductors' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Users size={14} /> ENCARREGADOS
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab('confirmations')}
+                      className={`flex-none min-w-[140px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'confirmations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <CheckCircle size={14} /> CONFIRMAÇÕES
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab('users')}
+                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <UserPlus size={14} /> MEMBROS
+                    </button>
+                    <button
+                      onClick={() => setAdminSubTab('settings')}
+                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Settings size={14} /> CONFIGS
+                    </button>
+                  </div>
+                  {/* Subtle indication of more items on mobile */}
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/80 to-transparent pointer-events-none lg:hidden rounded-r-[1.5rem]"></div>
                 </div>
               </header>
 
@@ -1743,12 +1763,20 @@ export default function App() {
                                   </select>
                                 </td>
                                 <td className="px-6 py-5 text-right">
-                                  <button
-                                    onClick={() => alert('ID do Usuário: ' + profile.id)}
-                                    className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"
-                                  >
-                                    <Info size={16} />
-                                  </button>
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
+                                      className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
+                                    >
+                                      <Edit2 size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => { setMemberToDelete(profile); setIsDeletingMember(true); }}
+                                      className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all shadow-sm active:scale-90"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -2332,6 +2360,154 @@ export default function App() {
               </div>
             )
           }
+
+          {/* DELETE MEMBER CONFIRMATION MODAL */}
+          {isDeletingMember && memberToDelete && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+                <div className="p-8 bg-red-600 text-white text-center">
+                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tight">Excluir Membro</h3>
+                  <p className="text-white/80 text-sm mt-1">Deseja realmente remover este usuário do sistema?</p>
+                </div>
+                <div className="p-8 space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
+                    <div className="bg-white p-2 rounded-xl text-slate-400">
+                      <User size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{memberToDelete.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <button
+                      onClick={() => handleDeleteMember(memberToDelete)}
+                      className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      EXCLUIR AGORA
+                    </button>
+                    <button
+                      onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
+                      className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
+                    >
+                      CANCELAR
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT MEMBER MODAL */}
+          {isMemberModalOpen && memberToEdit && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
+                <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
+                  <div>
+                    <h3 className="text-xl font-bold tracking-tight">Editar Membro</h3>
+                    <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Gestão Administrativa de Perfil</p>
+                  </div>
+                  <button onClick={() => { setIsMemberModalOpen(false); setMemberToEdit(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+                    <X size={24} />
+                  </button>
+                </div>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.currentTarget);
+                    const updates = {
+                      name: fd.get('name') as string,
+                      phone: fd.get('phone') as string,
+                      instrument: fd.get('instrument') as string,
+                      role: fd.get('role') as any,
+                      congregation_id: fd.get('congregationId') as string,
+                    };
+                    await updateUserProfile(memberToEdit.id, updates);
+                    setIsMemberModalOpen(false);
+                    setMemberToEdit(null);
+                  }}
+                  className="p-8 space-y-5"
+                >
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                      <User size={14} /> Nome Completo
+                    </label>
+                    <input
+                      name="name"
+                      required
+                      defaultValue={memberToEdit.name}
+                      type="text"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Briefcase size={14} /> Nível de Acesso
+                      </label>
+                      <select
+                        name="role"
+                        defaultValue={memberToEdit.role}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      >
+                        <option value="USER">COMUM</option>
+                        <option value="MUSICIAN">MÚSICO</option>
+                        <option value="ADMIN">ADMINISTRADOR</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Music size={14} /> Instrumento
+                      </label>
+                      <select
+                        name="instrument"
+                        defaultValue={memberToEdit.instrument}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      >
+                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                      <Phone size={14} /> WhatsApp
+                    </label>
+                    <input
+                      name="phone"
+                      defaultValue={memberToEdit.phone}
+                      type="tel"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                      <Landmark size={14} /> Congregação Comum
+                    </label>
+                    <select
+                      name="congregationId"
+                      defaultValue={memberToEdit.congregation_id || ''}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                    >
+                      <option value="">Selecione...</option>
+                      {congregations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="pt-4">
+                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+                      SALVAR ALTERAÇÕES <ChevronRight size={20} />
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* DELETE CONFIRMATION MODAL */}
           {isDeletingEvent && eventToDelete && (
