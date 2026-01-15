@@ -920,9 +920,17 @@ export default function App() {
 
               <div className="px-4 mt-12 space-y-12 max-w-5xl mx-auto pb-12">
                 <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Sparkles size={20} className="text-amber-500" /> Próximos Eventos em Destaque
-                  </h3>
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                      <Sparkles size={20} className="text-amber-500" /> Próximos Eventos em Destaque
+                    </h3>
+                    <button
+                      onClick={() => setActiveTab('events')}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-full transition-all flex items-center gap-1 group"
+                    >
+                      Ver Todos <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {dashboardData.largeEvents.length > 0 ? (
                       dashboardData.largeEvents.map(event => (
