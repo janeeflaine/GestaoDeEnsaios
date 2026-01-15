@@ -27,23 +27,23 @@ const getFriendlyEventName = (type: EventType) => {
 // --- Sub-components ---
 
 const DashboardStatCard: React.FC<{ title: string; total: number; remaining: number; icon: React.ReactNode; iconBg: string }> = ({ title, total, remaining, icon, iconBg }) => (
-  <div className="bg-white p-5 md:p-6 rounded-[2.5rem] md:rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row md:items-center gap-6 md:gap-0 transition-all hover:shadow-2xl hover:-translate-y-1 group overflow-hidden">
-    {/* Content - Left side on Desktop */}
-    <div className="flex items-center gap-4 md:flex-1 min-w-0 pr-6">
+  <div className="bg-white p-5 md:p-6 rounded-[2.5rem] md:rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row md:items-center gap-6 md:gap-0 transition-all hover:shadow-2xl hover:-translate-y-1 group">
+    <div className="flex items-center gap-4 md:flex-1 pr-6">
       <div className={`${iconBg} p-4 md:p-3.5 rounded-2xl md:rounded-2xl text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
         {icon}
       </div>
-      <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight flex-1 truncate">{title}</h3>
+      <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight flex-1">
+        {title}
+      </h3>
     </div>
 
-    {/* Stats - Right side on Desktop */}
-    <div className="grid grid-cols-2 gap-4 md:gap-0 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-slate-100 flex-shrink-0 md:h-12 md:flex md:items-center">
-      <div className="flex flex-col md:items-center md:px-8 border-r md:border-none border-slate-100 min-w-[70px] md:min-w-[100px]">
+    <div className="grid grid-cols-2 gap-4 md:gap-0 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-slate-100 flex-shrink-0 md:flex md:items-center">
+      <div className="flex flex-col md:items-center md:px-8 border-r md:border-none border-slate-100 min-w-[75px] md:min-w-[110px]">
         <span className="text-4xl md:text-3xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
         <span className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase tracking-[0.15em] mt-2 md:mt-1.5 font-bold">Restantes</span>
       </div>
-      <div className="flex flex-col md:items-center pl-4 md:px-8 min-w-[70px] md:min-w-[100px]">
-        <span className="text-4xl md:text-3xl font-black text-slate-200 tracking-tighter leading-none group-hover:text-slate-300 transition-colors">{total}</span>
+      <div className="flex flex-col md:items-center pl-4 md:px-8 min-w-[75px] md:min-w-[110px]">
+        <span className="text-4xl md:text-3xl font-black text-slate-200 tracking-tighter leading-none group-hover:text-slate-300 transition-colors uppercase">{total}</span>
         <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mt-2 md:mt-1.5 whitespace-nowrap font-bold">Total Anual</span>
       </div>
     </div>
@@ -697,13 +697,13 @@ export default function App() {
                   </p>
 
                   <div className="mt-10 max-w-2xl mx-auto relative group">
-                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
+                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={24} />
                     <input
                       type="text"
                       placeholder="Buscar por local ou encarregado..."
                       value={globalSearch}
                       onChange={(e) => setGlobalSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-200/50 rounded-full py-5 pl-16 pr-6 text-slate-800 outline-none focus:ring-8 focus:ring-white/10 focus:border-white/20 transition-all font-medium placeholder:text-slate-300 text-lg shadow-2xl"
+                      className="w-full bg-white border border-slate-200 shadow-2xl rounded-full py-6 pl-16 pr-8 text-slate-800 outline-none focus:ring-8 focus:ring-white/10 focus:border-indigo-500/20 transition-all font-semibold placeholder:text-slate-300 text-lg md:text-xl"
                     />
                   </div>
                 </div>
