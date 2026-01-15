@@ -27,21 +27,21 @@ const getFriendlyEventName = (type: EventType) => {
 // --- Sub-components ---
 
 const DashboardStatCard: React.FC<{ title: string; total: number; remaining: number; icon: React.ReactNode; iconBg: string }> = ({ title, total, remaining, icon, iconBg }) => (
-  <div className="bg-white p-6 md:p-5 rounded-[2.5rem] md:rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row gap-6 md:gap-10 items-stretch md:items-center transition-all hover:shadow-2xl hover:-translate-y-1 group">
-    <div className="flex items-center gap-4 md:flex-1">
+  <div className="bg-white p-6 md:p-5 rounded-[2.5rem] md:rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col md:flex-row gap-6 md:gap-4 items-stretch md:items-center transition-all hover:shadow-2xl hover:-translate-y-1 group overflow-hidden">
+    <div className="flex items-center gap-4 md:flex-1 min-w-0">
       <div className={`${iconBg} p-4 md:p-3 rounded-2xl md:rounded-xl text-white shadow-lg flex-shrink-0 flex items-center justify-center`}>
         {icon}
       </div>
-      <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight flex-1">{title}</h3>
+      <h3 className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight flex-1 truncate">{title}</h3>
     </div>
 
-    <div className="grid grid-cols-2 md:flex md:items-center gap-4 md:gap-16 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-slate-50 md:border-slate-100 md:pl-12">
-      <div className="flex flex-col md:items-center min-w-[80px]">
-        <span className="text-4xl md:text-3xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
+    <div className="grid grid-cols-2 md:flex md:items-center gap-4 md:gap-8 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-slate-50 md:border-slate-100 md:pl-8">
+      <div className="flex flex-col md:items-center min-w-[60px] md:min-w-[75px]">
+        <span className="text-4xl md:text-2xl font-black text-slate-900 tracking-tighter leading-none">{remaining}</span>
         <span className="text-[9px] md:text-[10px] font-black text-indigo-500 uppercase tracking-[0.15em] mt-2 md:mt-1 font-bold">Restantes</span>
       </div>
-      <div className="flex flex-col md:items-center border-l border-slate-100 md:border-l-0 pl-6 md:pl-0 min-w-[80px]">
-        <span className="text-4xl md:text-3xl font-black text-slate-200 tracking-tighter leading-none group-hover:text-slate-300 transition-colors">{total}</span>
+      <div className="flex flex-col md:items-center border-l border-slate-100 md:border-l-0 pl-6 md:pl-0 min-w-[60px] md:min-w-[75px]">
+        <span className="text-4xl md:text-2xl font-black text-slate-200 tracking-tighter leading-none group-hover:text-slate-300 transition-colors">{total}</span>
         <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mt-2 md:mt-1 whitespace-nowrap font-bold">Total Anual</span>
       </div>
     </div>
