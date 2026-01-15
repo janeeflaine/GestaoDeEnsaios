@@ -889,12 +889,26 @@ export default function App() {
   const isConductorDisabled = [EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(creatingEventType);
 
   const updateUserProfile = async (userId: string, updates: Partial<UserProfile>) => {
-    const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
-    if (error) {
-      console.error('Erro ao atualizar perfil:', error);
-      alert('Erro ao atualizar usuário: ' + error.message);
-    } else {
-      await fetchInitialData();
+    console.log('updateUserProfile called:', { userId, updates });
+    try {
+      const { data, error } = await supabase.from('profiles').update(updates).eq('id', userId).select();
+
+      if (error) {
+        console.error('Erro ao atualizar perfil:', error);
+        throw error;
+      }
+
+      console.log('Update result:', data);
+
+      if (!data || data.length === 0) {
+        console.warn('Nenhum perfil atualizado - Verifique RLS ou ID');
+        alert('Atenção: A alteração não foi salva. Verifique se você tem permissão de Administrador.');
+      } else {
+        console.log('Perfil atualizado com sucesso!');
+        await fetchInitialData();
+      }
+    } catch (err: any) {
+      alert('Erro ao atualizar usuário: ' + err.message);
     }
   };
 

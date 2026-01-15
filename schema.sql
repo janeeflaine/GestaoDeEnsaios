@@ -141,3 +141,9 @@ CREATE POLICY "Admins can delete profiles" ON profiles FOR DELETE USING (
     SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'ADMIN'
   )
 );
+
+CREATE POLICY "Admins can update all profiles" ON profiles FOR UPDATE USING (
+  EXISTS (
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'ADMIN'
+  )
+);
