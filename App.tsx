@@ -1007,7 +1007,7 @@ export default function App() {
                   {/* Row 2: 3 Cards */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <DashboardStatCard
-                      title="Batismos Efetuados"
+                      title="Cultos de Batismo"
                       total={stats.baptisms.total}
                       remaining={stats.baptisms.remaining}
                       icon={<Droplets size={20} />}
