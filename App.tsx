@@ -899,13 +899,25 @@ export default function App() {
   };
 
   const handleDeleteMember = async (profile: UserProfile) => {
+    console.log('handleDeleteMember called with profile:', profile);
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', profile.id);
-      if (error) throw error;
+      const { data, error, count } = await supabase.from('profiles').delete().eq('id', profile.id).select();
+      console.log('Delete result:', { data, error, count });
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+      if (!data || data.length === 0) {
+        console.warn('No rows deleted - possible RLS restriction');
+        alert('Não foi possível excluir o membro. Verifique suas permissões ou as políticas de segurança do banco de dados.');
+        return;
+      }
       await fetchInitialData();
       setIsDeletingMember(false);
       setMemberToDelete(null);
+      console.log('Member deleted successfully');
     } catch (err: any) {
+      console.error('Delete catch error:', err);
       alert('Erro ao excluir membro: ' + err.message);
     }
   };
