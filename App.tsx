@@ -1792,12 +1792,7 @@ export default function App() {
                                   <div className="flex justify-end gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        console.log('Edit button clicked for profile:', profile);
-                                        setMemberToEdit(profile);
-                                        setIsMemberModalOpen(true);
-                                        console.log('States set: memberToEdit and isMemberModalOpen');
-                                      }}
+                                      onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
                                       className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
                                     >
                                       <Edit2 size={16} />
@@ -2435,10 +2430,8 @@ export default function App() {
           )}
 
           {/* EDIT MEMBER MODAL */}
-          {(() => { console.log('Modal condition check:', { isMemberModalOpen, memberToEdit }); return null; })()}
           {isMemberModalOpen && memberToEdit && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              {(() => { console.log('MODAL IS RENDERING!'); return null; })()}
               <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
                 <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
                   <div>
@@ -2453,14 +2446,15 @@ export default function App() {
                   onSubmit={async (e) => {
                     e.preventDefault();
                     const fd = new FormData(e.currentTarget);
+                    const congId = fd.get('congregationId') as string;
                     const updates = {
                       name: fd.get('name') as string,
                       phone: fd.get('phone') as string,
                       instrument: fd.get('instrument') as string,
                       role: fd.get('role') as any,
-                      congregation_id: fd.get('congregationId') as string,
+                      congregation_id: congId || null,
                     };
-                    await updateUserProfile(memberToEdit.id, updates);
+                    await updateUserProfile(memberToEdit.id, updates as any);
                     setIsMemberModalOpen(false);
                     setMemberToEdit(null);
                   }}
