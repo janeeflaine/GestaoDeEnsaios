@@ -98,3 +98,40 @@ CREATE POLICY "Public Read Presences" ON presences FOR SELECT USING (true);
 CREATE POLICY "Public Insert Presences" ON presences FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Presences" ON presences FOR UPDATE USING (true);
 CREATE POLICY "Public Delete Presences" ON presences FOR DELETE USING (true);
+
+-- Profiles table linked to auth.users
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+    email TEXT,
+    name TEXT,
+    phone TEXT,
+    instrument TEXT,
+    congregation TEXT,
+    photo_url TEXT,
+    role TEXT DEFAULT 'USER'
+);
+
+-- Trigger to create profile after signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, name, instrument, role)
+    VALUES (
+        NEW.id, 
+        NEW.email, 
+        NEW.raw_user_meta_data->>'name', 
+        NEW.raw_user_meta_data->>'instrument',
+        COALESCE(NEW.raw_user_meta_data->>'role', 'USER')
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Enable RLS for profiles
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);

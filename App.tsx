@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload } from 'lucide-react';
+import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
 import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS } from './types';
 import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
 import { getGoogleCalendarUrl } from './utils/calendar';
 import { supabase } from './supabaseClient';
 import ImageCropperModal from './components/ImageCropper';
+import Auth from './components/Auth';
 
 // --- Utility: Type Colors ---
 const getTypeStyles = (type: EventType) => {
@@ -165,10 +166,13 @@ const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void;
         )}
         <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
       </button>
-      <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'admin' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
-        <Settings size={20} />
-        <span className="text-[10px] font-black uppercase tracking-widest">Admin</span>
-      </button>
+
+      {user?.role === 'ADMIN' && (
+        <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'admin' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+          <Settings size={20} />
+          <span className="text-[10px] font-black uppercase tracking-widest">Admin</span>
+        </button>
+      )}
     </div>
   </nav>
 );
@@ -199,10 +203,10 @@ export default function App() {
   const [presences, setPresences] = useState<Presence[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('user_profile_2026');
-    return saved ? JSON.parse(saved) : null;
-  });
+  // Auth States
+  const [session, setSession] = useState<any>(null);
+  const [isGuest, setIsGuest] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   const [selectedEvent, setSelectedEvent] = useState<RehearsalEvent | null>(null);
   const [selectedConductor, setSelectedConductor] = useState<Encarregado | null>(null);
@@ -228,12 +232,36 @@ export default function App() {
   const [presenceSearch, setPresenceSearch] = useState('');
   const [congregationSearch, setCongregationSearch] = useState('');
 
-  // Persistir Perfil
+  // Supabase Auth Listener
   useEffect(() => {
-    if (userProfile) {
-      localStorage.setItem('user_profile_2026', JSON.stringify(userProfile));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else setUserProfile(null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchUserProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (!error && data) {
+      setUserProfile({
+        ...data,
+        photoUrl: data.photo_url // Map snake_case from DB to camelCase in app
+      });
     }
-  }, [userProfile]);
+  };
 
   // Carregar dados iniciais do Supabase
   useEffect(() => {
@@ -405,7 +433,7 @@ export default function App() {
     }
   };
 
-  const handleAddEvent = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddOrUpdateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const month = formData.get('month') as string;
@@ -416,8 +444,8 @@ export default function App() {
 
     const needsConductor = ![EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(type);
 
-    const newEvent = {
-      id: `event-${Date.now()}`,
+    const eventData = {
+      id: selectedEvent ? selectedEvent.id : `event-${Date.now()}`,
       month,
       day: `${dayValue.padStart(2, '0')} (${weekday})`,
       full_date: new Date(2026, monthIndex, parseInt(dayValue)).toISOString(),
@@ -427,13 +455,14 @@ export default function App() {
       type: type,
     };
 
-    const { error } = await supabase.from('events').insert(newEvent);
+    const { error } = await supabase.from('events').upsert(eventData);
     if (!error) {
       await fetchInitialData();
       setIsCreatingEvent(false);
-      alert('Evento criado com sucesso!');
+      setSelectedEvent(null);
+      alert(selectedEvent ? 'Evento atualizado com sucesso!' : 'Evento criado com sucesso!');
     } else {
-      alert('Erro ao criar evento: ' + error.message);
+      alert('Erro ao salvar evento: ' + error.message);
     }
   };
 
@@ -543,18 +572,45 @@ export default function App() {
     setImageToCrop(null);
   };
 
-  const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isGuest || !userProfile) {
+      alert('Faça login para salvar seu perfil permanentemente.');
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
-    const newProfile: UserProfile = {
+    const profileToSave = {
+      id: userProfile.id,
+      email: userProfile.email,
       name: formData.get('name') as string,
       phone: formData.get('phone') as string,
       instrument: formData.get('instrument') as string,
       congregation: formData.get('congregation') as string,
-      photoUrl: formData.get('photoUrl') as string,
+      photo_url: userProfile.photoUrl,
+      role: userProfile.role
     };
-    setUserProfile(newProfile);
-    alert('Perfil salvo com sucesso!');
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(profileToSave);
+
+    if (error) alert('Erro ao salvar: ' + error.message);
+    else {
+      setUserProfile({
+        ...userProfile,
+        name: profileToSave.name,
+        phone: profileToSave.phone,
+        instrument: profileToSave.instrument,
+        congregation: profileToSave.congregation
+      });
+      alert('Perfil atualizado com sucesso!');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsGuest(false);
     setActiveTab('dashboard');
   };
 
@@ -589,6 +645,10 @@ export default function App() {
   };
 
   const isConductorDisabled = [EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(creatingEventType);
+
+  if (!session && !isGuest) {
+    return <Auth onGuestAccess={() => setIsGuest(true)} />;
+  }
 
   return (
     <div className="pb-24 flex flex-col min-h-screen selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50">
@@ -810,6 +870,16 @@ export default function App() {
 
               <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
                 <div className="p-8 bg-indigo-600 flex flex-col items-center gap-4 relative">
+                  {isGuest && (
+                    <div className="absolute top-4 right-4 animate-bounce">
+                      <button
+                        onClick={() => setIsGuest(false)}
+                        className="bg-white/20 hover:bg-white/30 text-white text-[10px] font-black px-4 py-2 rounded-full border border-white/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-2"
+                      >
+                        <UserPlus size={12} /> Criar Conta
+                      </button>
+                    </div>
+                  )}
                   <div className="relative group">
                     <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center border-4 border-white/30 overflow-hidden shadow-2xl">
                       {userProfile?.photoUrl ? (
@@ -820,8 +890,9 @@ export default function App() {
                     </div>
                     <button
                       type="button"
+                      disabled={isGuest}
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12"
+                      className={`absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12 ${isGuest ? 'opacity-30 cursor-not-allowed' : ''}`}
                     >
                       <Camera size={18} strokeWidth={2.5} />
                     </button>
@@ -834,12 +905,18 @@ export default function App() {
                     />
                   </div>
                   <div className="text-center">
-                    <h2 className="text-white text-xl font-bold tracking-tight leading-none">{userProfile?.name || 'Seu Nome'}</h2>
-                    <p className="text-white/60 text-xs font-medium uppercase tracking-widest mt-1">{userProfile?.instrument || 'Instrumento'}</p>
+                    <h2 className="text-white text-xl font-bold tracking-tight leading-none">{isGuest ? 'Visualizando como Visitante' : (userProfile?.name || 'Seu Nome')}</h2>
+                    <p className="text-white/60 text-xs font-medium uppercase tracking-widest mt-1">{isGuest ? 'Acesso Limitado' : (userProfile?.instrument || 'Instrumento')}</p>
                   </div>
                 </div>
 
-                <form onSubmit={handleSaveProfile} className="p-8 space-y-6">
+                <form onSubmit={handleSaveProfile} className={`p-8 space-y-6 ${isGuest ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isGuest && (
+                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-3 mb-4">
+                      <Info className="text-amber-500" size={20} />
+                      <p className="text-xs font-medium text-amber-700">Como visitante, suas edições no perfil não serão salvas. <button onClick={() => setIsGuest(false)} className="underline font-black">Crie uma conta</button> para gerenciar seu perfil musical.</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
@@ -887,15 +964,17 @@ export default function App() {
                   </div>
 
                   <div className="pt-4 flex gap-3">
-                    <button type="submit" className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                      Salvar Perfil <CheckCircle size={20} />
-                    </button>
+                    {!isGuest && (
+                      <button type="submit" className="flex-1 bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+                        Salvar Perfil <CheckCircle size={20} />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => { if (confirm('Sair da conta? Seus dados locais serão mantidos.')) setActiveTab('dashboard'); }}
-                      className="px-6 bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-colors"
+                      onClick={handleLogout}
+                      className="px-6 bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 font-black text-xs"
                     >
-                      <LogOut size={20} />
+                      <LogOut size={18} /> {isGuest ? 'SAIR DO MODO VISITANTE' : 'SAIR DA CONTA'}
                     </button>
                   </div>
                 </form>
@@ -1027,7 +1106,7 @@ export default function App() {
                                   <button onClick={() => toggleCancelEvent(event)} className={`p-2.5 rounded-xl transition-all ${event.canceled ? 'text-emerald-500 bg-emerald-50 hover:bg-emerald-100' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
                                     {event.canceled ? <CheckCircle size={18} /> : <X size={18} />}
                                   </button>
-                                  <button className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all">
+                                  <button onClick={() => { setSelectedEvent(event); setIsCreatingEvent(true); }} className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all">
                                     <Edit2 size={18} />
                                   </button>
                                 </div>
@@ -1238,333 +1317,343 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
+          )
+          }
 
           {/* MODALS */}
           {/* PRESENCE MODAL */}
-          {isConfirming && selectedEvent && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${getTypeStyles(selectedEvent.type).card}`}>
-                  <div className="relative z-10">
-                    <h3 className="text-2xl font-black tracking-tight">Confirmar Presença</h3>
-                    <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">{getFriendlyEventName(selectedEvent.type)} • {selectedEvent.location}</p>
-                  </div>
-                  <button onClick={() => setIsConfirming(false)} className="bg-white/20 p-3 rounded-2xl hover:bg-white/30 transition-all relative z-10 active:scale-90">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form onSubmit={handleConfirmPresence} className="p-10 space-y-6">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                      <User size={14} /> Nome Completo
-                    </label>
-                    <input
-                      required
-                      name="name"
-                      defaultValue={userProfile?.name}
-                      type="text"
-                      placeholder="Seu nome completo"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                        <Music size={14} /> Instrumento
-                      </label>
-                      <select
-                        name="instrument"
-                        defaultValue={userProfile?.instrument}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
+          {
+            isConfirming && selectedEvent && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${getTypeStyles(selectedEvent.type).card}`}>
+                    <div className="relative z-10">
+                      <h3 className="text-2xl font-black tracking-tight">Confirmar Presença</h3>
+                      <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">{getFriendlyEventName(selectedEvent.type)} • {selectedEvent.location}</p>
                     </div>
+                    <button onClick={() => setIsConfirming(false)} className="bg-white/20 p-3 rounded-2xl hover:bg-white/30 transition-all relative z-10 active:scale-90">
+                      <X size={24} />
+                    </button>
+                  </div>
+                  <form onSubmit={handleConfirmPresence} className="p-10 space-y-6">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                        <Phone size={14} /> WhatsApp
+                        <User size={14} /> Nome Completo
                       </label>
                       <input
-                        name="phone"
-                        defaultValue={userProfile?.phone}
-                        type="tel"
-                        placeholder="(00) 00000-0000"
+                        required
+                        name="name"
+                        defaultValue={userProfile?.name}
+                        type="text"
+                        placeholder="Seu nome completo"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
                       />
                     </div>
-                  </div>
 
-                  <button type="submit" className={`w-full text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:scale-[1.02] ${getTypeStyles(selectedEvent.type).card}`}>
-                    Confirmar agora <ChevronRight size={20} />
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* CREATE CONGREGATION MODAL */}
-          {isCreatingCongregation && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                <div className="p-8 bg-indigo-600 text-white flex justify-between items-center flex-shrink-0">
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">{selectedCongregation ? 'Editar Congregação' : 'Nova Congregação'}</h3>
-                    <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Sedes e Locais de Culto</p>
-                  </div>
-                  <button onClick={() => setIsCreatingCongregation(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form onSubmit={handleAddOrUpdateCongregation} className="p-8 overflow-y-auto space-y-8 no-scrollbar">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Landmark size={14} /> Nome da Congregação</label>
-                      <input required name="name" defaultValue={selectedCongregation?.name} type="text" placeholder="Ex: Santa Terezinha" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
-                      <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value="CENTRAL">CENTRAL</option>
-                        <option value="LOCAL">LOCAL</option>
-                        <option value="DISTRITO">DISTRITO</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2">Localização</h4>
                     <div className="grid grid-cols-1 gap-5">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logradouro</label>
-                        <input required name="address" defaultValue={selectedCongregation?.address} type="text" placeholder="Rua, Número, Bairro" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
+                          <Music size={14} /> Instrumento
+                        </label>
+                        <select
+                          name="instrument"
+                          defaultValue={userProfile?.instrument}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                        >
+                          {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                        </select>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
+                          <Phone size={14} /> WhatsApp
+                        </label>
+                        <input
+                          name="phone"
+                          defaultValue={userProfile?.phone}
+                          type="tel"
+                          placeholder="(00) 00000-0000"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className={`w-full text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:scale-[1.02] ${getTypeStyles(selectedEvent.type).card}`}>
+                      Confirmar agora <ChevronRight size={20} />
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )
+          }
+
+          {/* CREATE CONGREGATION MODAL */}
+          {
+            isCreatingCongregation && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center flex-shrink-0">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight">{selectedCongregation ? 'Editar Congregação' : 'Nova Congregação'}</h3>
+                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Sedes e Locais de Culto</p>
+                    </div>
+                    <button onClick={() => setIsCreatingCongregation(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+                      <X size={24} />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddOrUpdateCongregation} className="p-8 overflow-y-auto space-y-8 no-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Landmark size={14} /> Nome da Congregação</label>
+                        <input required name="name" defaultValue={selectedCongregation?.name} type="text" placeholder="Ex: Santa Terezinha" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
+                        <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                          <option value="CENTRAL">CENTRAL</option>
+                          <option value="LOCAL">LOCAL</option>
+                          <option value="DISTRITO">DISTRITO</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2">Localização</h4>
+                      <div className="grid grid-cols-1 gap-5">
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
-                          <input name="cep" defaultValue={selectedCongregation?.cep} type="text" placeholder="00000-000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logradouro</label>
+                          <input required name="address" defaultValue={selectedCongregation?.address} type="text" placeholder="Rua, Número, Bairro" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
                         </div>
-                        <div className="space-y-1.5 md:col-span-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cidade / Estado</label>
-                          <div className="flex gap-3">
-                            <input required name="city" defaultValue={selectedCongregation?.city} type="text" placeholder="Cidade" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                            <input required name="state" defaultValue={selectedCongregation?.state || 'MG'} type="text" placeholder="UF" className="w-20 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
+                            <input name="cep" defaultValue={selectedCongregation?.cep} type="text" placeholder="00000-000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cidade / Estado</label>
+                            <div className="flex gap-3">
+                              <input required name="city" defaultValue={selectedCongregation?.city} type="text" placeholder="Cidade" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                              <input required name="state" defaultValue={selectedCongregation?.state || 'MG'} type="text" placeholder="UF" className="w-20 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
-                      Dias de Culto
-                    </h4>
-                    <div className="space-y-3">
-                      {(selectedCongregation?.serviceDays.length ? selectedCongregation.serviceDays : [{ day: '', time: '' }]).map((sd, idx) => (
-                        <div key={idx} className="flex gap-4">
-                          <select name="serviceDay" defaultValue={sd.day} className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                            <option value="">Selecione o Dia...</option>
-                            {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                          </select>
-                          <input name="serviceTime" defaultValue={sd.time} type="text" placeholder="19:30" className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
+                        Dias de Culto
+                      </h4>
+                      <div className="space-y-3">
+                        {(selectedCongregation?.serviceDays.length ? selectedCongregation.serviceDays : [{ day: '', time: '' }]).map((sd, idx) => (
+                          <div key={idx} className="flex gap-4">
+                            <select name="serviceDay" defaultValue={sd.day} className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                              <option value="">Selecione o Dia...</option>
+                              {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                            <input name="serviceTime" defaultValue={sd.time} type="text" placeholder="19:30" className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
-                      Ministério
-                    </h4>
-                    <div className="space-y-3">
-                      {(selectedCongregation?.ministry.length ? selectedCongregation.ministry : [{ role: '', name: '' }]).map((m, idx) => (
-                        <div key={idx} className="flex gap-4">
-                          <select name="ministryRole" defaultValue={m.role} className="w-40 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                            <option value="">Cargo...</option>
-                            <option value="Ancião">Ancião</option>
-                            <option value="Diácono">Diácono</option>
-                            <option value="Cooperador">Cooperador</option>
-                          </select>
-                          <input name="ministryName" defaultValue={m.name} type="text" placeholder="Nome Completo" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
+                        Ministério
+                      </h4>
+                      <div className="space-y-3">
+                        {(selectedCongregation?.ministry.length ? selectedCongregation.ministry : [{ role: '', name: '' }]).map((m, idx) => (
+                          <div key={idx} className="flex gap-4">
+                            <select name="ministryRole" defaultValue={m.role} className="w-40 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                              <option value="">Cargo...</option>
+                              <option value="Ancião">Ancião</option>
+                              <option value="Diácono">Diácono</option>
+                              <option value="Cooperador">Cooperador</option>
+                            </select>
+                            <input name="ministryName" defaultValue={m.name} type="text" placeholder="Nome Completo" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="pt-4 flex-shrink-0">
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                      {selectedCongregation ? 'Atualizar Congregação' : 'Cadastrar Congregação'} <ChevronRight size={20} />
-                    </button>
-                  </div>
-                </form>
+                    <div className="pt-4 flex-shrink-0">
+                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+                        {selectedCongregation ? 'Atualizar Congregação' : 'Cadastrar Congregação'} <ChevronRight size={20} />
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          }
 
           {/* CREATE EVENT MODAL */}
-          {isCreatingEvent && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">Novo Evento 2026</h3>
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Configuração do Cronograma</p>
-                  </div>
-                  <button onClick={() => setIsCreatingEvent(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form onSubmit={handleAddEvent} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <MapPin size={14} /> Localização / Distrito
-                    </label>
-                    <select required name="location" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                      <option value="">Selecione o Local...</option>
-                      {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <List size={14} /> Tipo de Evento
-                    </label>
-                    <select
-                      name="type"
-                      value={creatingEventType}
-                      onChange={(e) => setCreatingEventType(e.target.value as EventType)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    >
-                      {Object.values(EventType).map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-
-                  <div className={`space-y-1.5 transition-opacity ${isConductorDisabled ? 'opacity-40' : 'opacity-100'}`}>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <User size={14} /> Encarregado
-                    </label>
-                    <input
-                      required={!isConductorDisabled}
-                      disabled={isConductorDisabled}
-                      name="conductor"
-                      type="text"
-                      placeholder={isConductorDisabled ? "N/A" : "Nome do encarregado"}
-                      className={`w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium ${isConductorDisabled ? 'cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Calendar size={14} /> Mês
-                    </label>
-                    <select name="month" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                      {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Número)</label>
-                      <input required name="day" type="number" min="1" max="31" placeholder="Ex: 15" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+          {
+            isCreatingEvent && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : 'Novo Evento 2026'}</h3>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{selectedEvent ? 'Atualização de Agendamento' : 'Configuração do Cronograma'}</p>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Semana)</label>
-                      <select name="weekday" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(w => <option key={w} value={w}>{w}</option>)}
+                    <button onClick={() => { setIsCreatingEvent(false); setSelectedEvent(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+                      <X size={24} />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddOrUpdateEvent} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <MapPin size={14} /> Localização / Distrito
+                      </label>
+                      <select required name="location" defaultValue={selectedEvent?.location} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        <option value="">Selecione o Local...</option>
+                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
-                  </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Clock size={14} /> Horário
-                    </label>
-                    <input required name="time" type="text" placeholder="Ex: 17:00h" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                  </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <List size={14} /> Tipo de Evento
+                      </label>
+                      <select
+                        name="type"
+                        value={creatingEventType}
+                        onChange={(e) => setCreatingEventType(e.target.value as EventType)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      >
+                        {Object.values(EventType).map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
 
-                  <div className="md:col-span-2 pt-4">
-                    <button type="submit" className="w-full bg-slate-800 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-slate-900">
-                      Salvar Novo Evento <ChevronRight size={20} />
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+                    <div className={`space-y-1.5 transition-opacity ${isConductorDisabled ? 'opacity-40' : 'opacity-100'}`}>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <User size={14} /> Encarregado
+                      </label>
+                      <input
+                        required={!isConductorDisabled}
+                        disabled={isConductorDisabled}
+                        name="conductor"
+                        defaultValue={selectedEvent?.conductor}
+                        type="text"
+                        placeholder={isConductorDisabled ? "N/A" : "Nome do encarregado"}
+                        className={`w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium ${isConductorDisabled ? 'cursor-not-allowed' : ''}`}
+                      />
+                    </div>
 
-          {isCreatingConductor && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">{selectedConductor ? 'Editar Perfil' : 'Novo Encarregado'}</h3>
-                    <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Perfis de Música</p>
-                  </div>
-                  <button onClick={() => { setIsCreatingConductor(false); setSelectedConductor(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                    <X size={24} />
-                  </button>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Calendar size={14} /> Mês
+                      </label>
+                      <select name="month" defaultValue={selectedEvent?.month} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Número)</label>
+                        <input required name="day" defaultValue={selectedEvent?.day.split(' ')[0]} type="number" min="1" max="31" placeholder="Ex: 15" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Semana)</label>
+                        <select name="weekday" defaultValue={selectedEvent?.day.split('(')[1]?.replace(')', '')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(w => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Clock size={14} /> Horário
+                      </label>
+                      <input required name="time" defaultValue={selectedEvent?.time} type="text" placeholder="Ex: 17:00h" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    </div>
+
+                    <div className="md:col-span-2 pt-4">
+                      <button type="submit" className="w-full bg-slate-800 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-slate-900">
+                        {selectedEvent ? 'Salvar Alterações' : 'Salvar Novo Evento'} <ChevronRight size={20} />
+                      </button>
+                    </div>
+                  </form>
                 </div>
-                <form onSubmit={handleAddOrUpdateConductor} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <User size={14} /> Nome do Encarregado
-                    </label>
-                    <input required name="name" defaultValue={selectedConductor?.name} type="text" placeholder="Nome Completo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                  </div>
+              </div>
+            )
+          }
 
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Calendar size={14} /> Idade
-                    </label>
-                    <input required name="age" defaultValue={selectedConductor?.age} type="number" placeholder="Anos" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Music size={14} /> Instrumento
-                    </label>
-                    <select name="instrument" defaultValue={selectedConductor?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                      {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <MapPin size={14} /> Congregação Comum
-                    </label>
-                    <select name="congregation" defaultValue={selectedConductor?.congregation} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                      <option value="">Selecione...</option>
-                      {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <List size={14} /> Tipo
-                    </label>
-                    <select name="type" defaultValue={selectedConductor?.type || ConductorType.LOCAL} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                      <option value={ConductorType.LOCAL}>Local</option>
-                      <option value={ConductorType.REGIONAL}>Regional</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Camera size={14} /> URL da Foto (Opcional)
-                    </label>
-                    <input name="photoUrl" defaultValue={selectedConductor?.photoUrl} type="url" placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                  </div>
-
-                  <div className="md:col-span-2 pt-4">
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                      {selectedConductor ? 'Salvar Alterações' : 'Cadastrar Perfil'} <ChevronRight size={20} />
+          {
+            isCreatingConductor && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight">{selectedConductor ? 'Editar Perfil' : 'Novo Encarregado'}</h3>
+                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Perfis de Música</p>
+                    </div>
+                    <button onClick={() => { setIsCreatingConductor(false); setSelectedConductor(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+                      <X size={24} />
                     </button>
                   </div>
-                </form>
+                  <form onSubmit={handleAddOrUpdateConductor} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <User size={14} /> Nome do Encarregado
+                      </label>
+                      <input required name="name" defaultValue={selectedConductor?.name} type="text" placeholder="Nome Completo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Calendar size={14} /> Idade
+                      </label>
+                      <input required name="age" defaultValue={selectedConductor?.age} type="number" placeholder="Anos" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Music size={14} /> Instrumento
+                      </label>
+                      <select name="instrument" defaultValue={selectedConductor?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <MapPin size={14} /> Congregação Comum
+                      </label>
+                      <select name="congregation" defaultValue={selectedConductor?.congregation} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        <option value="">Selecione...</option>
+                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <List size={14} /> Tipo
+                      </label>
+                      <select name="type" defaultValue={selectedConductor?.type || ConductorType.LOCAL} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        <option value={ConductorType.LOCAL}>Local</option>
+                        <option value={ConductorType.REGIONAL}>Regional</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                        <Camera size={14} /> URL da Foto (Opcional)
+                      </label>
+                      <input name="photoUrl" defaultValue={selectedConductor?.photoUrl} type="url" placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    </div>
+
+                    <div className="md:col-span-2 pt-4">
+                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+                        {selectedConductor ? 'Salvar Alterações' : 'Cadastrar Perfil'} <ChevronRight size={20} />
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          }
 
         </main>
       )}
@@ -1591,7 +1680,6 @@ export default function App() {
           {activeTab === 'admin' ? <Plus size={28} /> : <List size={28} />}
         </button>
       )}
-
     </div>
   );
 }

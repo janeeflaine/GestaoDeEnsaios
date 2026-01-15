@@ -12,12 +12,22 @@ export enum ConductorType {
   REGIONAL = 'Regional'
 }
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  MUSICIAN = 'MUSICIAN',
+  USER = 'USER',
+  GUEST = 'GUEST'
+}
+
 export interface UserProfile {
+  id: string;
+  email: string;
   name: string;
   phone: string;
   instrument: string;
   congregation: string;
   photoUrl: string;
+  role: UserRole;
 }
 
 export interface Ministry {
@@ -83,7 +93,7 @@ export const INSTRUMENTS = [
   // Cordas
   'Violino', 'Viola', 'Violoncelo', 'Contrabaixo',
   // Madeiras
-  'Flauta', 'Oboé', 'Corne Inglês', 'Fagote', 
+  'Flauta', 'Oboé', 'Corne Inglês', 'Fagote',
   'Clarinete', 'Clarinete Alto', 'Clarinete Baixo',
   'Saxofone Soprano', 'Saxofone Alto', 'Saxofone Tenor', 'Saxofone Barítono',
   // Metais
