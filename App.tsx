@@ -264,7 +264,7 @@ const Footer: React.FC = () => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [adminSubTab, setAdminSubTab] = useState<'events' | 'conductors' | 'confirmations' | 'congregations'>('events');
+  const [adminSubTab, setAdminSubTab] = useState<'events' | 'conductors' | 'confirmations' | 'congregations' | 'users'>('events');
   const [events, setEvents] = useState<RehearsalEvent[]>([]);
   const [conductors, setConductors] = useState<Encarregado[]>([]);
   const [congregations, setCongregations] = useState<Congregation[]>([]);
@@ -884,6 +884,16 @@ export default function App() {
 
   const isConductorDisabled = [EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(creatingEventType);
 
+  const updateUserProfile = async (userId: string, updates: Partial<UserProfile>) => {
+    const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
+    if (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      alert('Erro ao atualizar usuário: ' + error.message);
+    } else {
+      await fetchInitialData();
+    }
+  };
+
   if (!session && !isGuest) {
     return <Auth onGuestAccess={() => setIsGuest(true)} />;
   }
@@ -1223,12 +1233,18 @@ export default function App() {
                         <Music size={14} /> Instrumento Principal
                       </label>
                       <select
+                        disabled={userProfile?.role !== 'MUSICIAN' && userProfile?.role !== 'ADMIN'}
                         value={formData.instrument}
                         onChange={(e) => setFormData({ ...formData, instrument: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
                       >
                         {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
                       </select>
+                      {userProfile?.role !== 'MUSICIAN' && userProfile?.role !== 'ADMIN' && (
+                        <p className="text-[9px] text-amber-600 font-bold uppercase tracking-wider ml-1 mt-1 flex items-center gap-1">
+                          <Info size={10} /> Solicite ao administrador para alterar seu instrumento
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -1332,8 +1348,14 @@ export default function App() {
                     <CheckCircle size={14} /> CONFIRMAÇÕES
                   </button>
                   <button
-                    onClick={() => setAdminSubTab('settings' as any)}
-                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === ('settings' as any) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                    onClick={() => setAdminSubTab('users')}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <UserPlus size={14} /> MEMBROS
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('settings')}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                   >
                     <Settings size={14} /> CONFIGS
                   </button>
@@ -1535,7 +1557,7 @@ export default function App() {
                 </div>
               )}
               {/* TAB: CONFIGURAÇÕES (CATEGORIAS E CARGOS) */}
-              {adminSubTab === ('settings' as any) && (
+              {adminSubTab === 'settings' && (
                 <div className="space-y-6 animate-in fade-in duration-300 pb-12">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-bold text-slate-800 tracking-tight">Configurações Base</h3>
@@ -1648,6 +1670,90 @@ export default function App() {
                         ))}
                         {roles.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum cargo cadastrado.</p>}
                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: MEMBROS (USUÁRIOS) */}
+              {adminSubTab === 'users' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Membros</h3>
+                    <div className="relative w-full md:w-80">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Buscar usuário..."
+                        value={presenceSearch}
+                        onChange={(e) => setPresenceSearch(e.target.value)}
+                        className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
+                    <div className="overflow-x-auto no-scrollbar">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            <th className="px-6 py-5">Nome / E-mail</th>
+                            <th className="px-6 py-5">Cargo / Tipo</th>
+                            <th className="px-6 py-5">Instrumento</th>
+                            <th className="px-6 py-5 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm divide-y divide-slate-50">
+                          {allProfiles
+                            .filter(p =>
+                              p.name.toLowerCase().includes(presenceSearch.toLowerCase()) ||
+                              p.email.toLowerCase().includes(presenceSearch.toLowerCase())
+                            )
+                            .map((profile) => (
+                              <tr key={profile.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-6 py-5">
+                                  <div className="flex items-center gap-3">
+                                    <div className="bg-slate-100 text-slate-400 p-2.5 rounded-xl">
+                                      <User size={18} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-slate-800 tracking-tight">{profile.name}</span>
+                                      <span className="text-[10px] text-slate-400 font-medium">{profile.email}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <select
+                                    className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-indigo-600 outline-none cursor-pointer"
+                                    value={profile.role}
+                                    onChange={(e) => updateUserProfile(profile.id, { role: e.target.value as any })}
+                                  >
+                                    <option value="USER">Comum</option>
+                                    <option value="MUSICIAN">Músico</option>
+                                    <option value="ADMIN">Admin</option>
+                                  </select>
+                                </td>
+                                <td className="px-6 py-5">
+                                  <select
+                                    className="bg-transparent border-none text-xs font-bold text-slate-600 outline-none cursor-pointer"
+                                    value={profile.instrument}
+                                    onChange={(e) => updateUserProfile(profile.id, { instrument: e.target.value })}
+                                  >
+                                    {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <button
+                                    onClick={() => alert('ID do Usuário: ' + profile.id)}
+                                    className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"
+                                  >
+                                    <Info size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>

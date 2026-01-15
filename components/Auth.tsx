@@ -173,12 +173,25 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                 </form>
 
                 <div className="mt-8 space-y-3">
-                    <button
-                        onClick={() => setIsLogin(!isLogin)}
-                        className="w-full text-white/40 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors py-2"
-                    >
-                        {isLogin ? 'Não tem conta? Crie uma aqui' : 'Já tem conta? Faça o login'}
-                    </button>
+                    {isLogin ? (
+                        <div className="pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsLogin(false)}
+                                className="w-full bg-rose-600/20 text-rose-400 border border-rose-600/30 font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-rose-600/30 transition-all text-xs tracking-widest shadow-lg shadow-rose-900/20"
+                            >
+                                <UserPlus size={16} /> AINDA NÃO TEM CONTA? CADASTRE-SE AQUI
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setIsLogin(true)}
+                            className="w-full text-white/40 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors py-2 flex items-center justify-center gap-2"
+                        >
+                            <ArrowLeft size={14} /> JÁ TEM CONTA? VOLTAR PARA O LOGIN
+                        </button>
+                    )}
 
                     <div className="relative py-2">
                         <div className="absolute inset-0 flex items-center">
