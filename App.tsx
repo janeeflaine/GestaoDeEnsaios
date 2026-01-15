@@ -1778,7 +1778,12 @@ export default function App() {
                                   <div className="flex justify-end gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
+                                      onClick={() => {
+                                        console.log('Edit button clicked for profile:', profile);
+                                        setMemberToEdit(profile);
+                                        setIsMemberModalOpen(true);
+                                        console.log('States set: memberToEdit and isMemberModalOpen');
+                                      }}
                                       className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
                                     >
                                       <Edit2 size={16} />
