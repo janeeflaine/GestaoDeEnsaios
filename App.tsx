@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
-import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS } from './types';
+import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole } from './types';
 import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
 import { getGoogleCalendarUrl } from './utils/calendar';
 import { supabase } from './supabaseClient';
@@ -288,6 +288,15 @@ export default function App() {
 
   const [creatingEventType, setCreatingEventType] = useState<EventType>(EventType.LOCAL);
 
+  // Dynamic Data States
+  const [categories, setCategories] = useState<CongregationCategory[]>([]);
+  const [roles, setRoles] = useState<MinistryRole[]>([]);
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
+
+  // Local/Temporary States for Dynamic Forms
+  const [tempServiceDays, setTempServiceDays] = useState<ServiceDay[]>([]);
+  const [tempMinistry, setTempMinistry] = useState<Ministry[]>([]);
+
   // Photo Upload State
   const [isCropping, setIsCropping] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -381,6 +390,18 @@ export default function App() {
           timestamp: new Date(p.timestamp)
         })));
       }
+
+      // Fetch Categories
+      const { data: catData } = await supabase.from('congregation_categories').select('*').order('name');
+      if (catData) setCategories(catData);
+
+      // Fetch Roles
+      const { data: roleData } = await supabase.from('ministry_roles').select('*').order('name');
+      if (roleData) setRoles(roleData);
+
+      // Fetch All Profiles (for ministry lookup)
+      const { data: profData } = await supabase.from('profiles').select('*').order('name');
+      if (profData) setAllProfiles(profData);
     } catch (error) {
       console.error('Erro geral ao carregar dados:', error);
     } finally {
@@ -567,6 +588,13 @@ export default function App() {
     const formData = new FormData(e.currentTarget);
 
     const congregationId = selectedCongregation?.id || `cong-${Date.now()}`;
+
+    // Validate inputs
+    if (tempServiceDays.length === 0) {
+      alert('Adicione ao menos um dia de culto.');
+      return;
+    }
+
     const congregationData = {
       id: congregationId,
       name: formData.get('name') as string,
@@ -583,33 +611,31 @@ export default function App() {
       return;
     }
 
-    // Update Service Days (Relational or simplify with JSONB if too complex, but let's stick to relational)
-    // For simplicity in this demo, let's delete existing and insert new if editing
+    // Save Service Days
     if (selectedCongregation) {
       await supabase.from('service_days').delete().eq('congregation_id', congregationId);
-      await supabase.from('ministry').delete().eq('congregation_id', congregationId);
     }
-
-    const dayInputs = formData.getAll('serviceDay') as string[];
-    const timeInputs = formData.getAll('serviceTime') as string[];
-    for (let i = 0; i < dayInputs.length; i++) {
-      if (dayInputs[i] && timeInputs[i]) {
+    for (const sd of tempServiceDays) {
+      if (sd.day && sd.time) {
         await supabase.from('service_days').insert({
           congregation_id: congregationId,
-          day: dayInputs[i],
-          time: timeInputs[i]
+          day: sd.day,
+          time: sd.time
         });
       }
     }
 
-    const roleInputs = formData.getAll('ministryRole') as string[];
-    const nameInputs = formData.getAll('ministryName') as string[];
-    for (let i = 0; i < roleInputs.length; i++) {
-      if (roleInputs[i] && nameInputs[i]) {
+    // Save Ministry
+    if (selectedCongregation) {
+      await supabase.from('ministry').delete().eq('congregation_id', congregationId);
+    }
+    for (const m of tempMinistry) {
+      if (m.role && m.name) {
         await supabase.from('ministry').insert({
           congregation_id: congregationId,
-          role: roleInputs[i],
-          name: nameInputs[i]
+          role: m.role,
+          name: m.name,
+          profile_id: m.profileId
         });
       }
     }
@@ -696,6 +722,37 @@ export default function App() {
   const deleteCongregation = async (id: string) => {
     if (confirm('Deseja realmente excluir esta congregação?')) {
       const { error } = await supabase.from('congregations').delete().eq('id', id);
+      if (!error) await fetchInitialData();
+      else alert('Erro ao excluir: ' + error.message);
+    }
+  };
+
+  // --- Config CRUD Functions ---
+  const addCategory = async (name: string) => {
+    if (!name) return;
+    const { error } = await supabase.from('congregation_categories').insert({ name });
+    if (!error) await fetchInitialData();
+    else alert('Erro ao adicionar categoria: ' + error.message);
+  };
+
+  const deleteCategory = async (id: number) => {
+    if (confirm('Deseja realmente excluir esta categoria?')) {
+      const { error } = await supabase.from('congregation_categories').delete().eq('id', id);
+      if (!error) await fetchInitialData();
+      else alert('Erro ao excluir: ' + error.message);
+    }
+  };
+
+  const addRole = async (name: string) => {
+    if (!name) return;
+    const { error } = await supabase.from('ministry_roles').insert({ name });
+    if (!error) await fetchInitialData();
+    else alert('Erro ao adicionar cargo: ' + error.message);
+  };
+
+  const deleteRole = async (id: number) => {
+    if (confirm('Deseja realmente excluir este cargo?')) {
+      const { error } = await supabase.from('ministry_roles').delete().eq('id', id);
       if (!error) await fetchInitialData();
       else alert('Erro ao excluir: ' + error.message);
     }
@@ -1132,6 +1189,12 @@ export default function App() {
                   >
                     <CheckCircle size={14} /> CONFIRMAÇÕES
                   </button>
+                  <button
+                    onClick={() => setAdminSubTab('settings' as any)}
+                    className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${adminSubTab === ('settings' as any) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <Settings size={14} /> CONFIGS
+                  </button>
                 </div>
               </header>
 
@@ -1244,7 +1307,12 @@ export default function App() {
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Congregações</h3>
                     <button
-                      onClick={() => { setSelectedCongregation(null); setIsCreatingCongregation(true); }}
+                      onClick={() => {
+                        setSelectedCongregation(null);
+                        setTempServiceDays([{ day: '', time: '19:30' }]);
+                        setTempMinistry([{ role: '', name: '' }]);
+                        setIsCreatingCongregation(true);
+                      }}
                       className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
                     >
                       <Plus size={16} /> NOVA CONGREGAÇÃO
@@ -1271,7 +1339,15 @@ export default function App() {
                             <h4 className="text-2xl font-black text-slate-800 tracking-tight">{cong.name}</h4>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => { setSelectedCongregation(cong); setIsCreatingCongregation(true); }} className="p-3 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
+                            <button
+                              onClick={() => {
+                                setSelectedCongregation(cong);
+                                setTempServiceDays(cong.serviceDays.length ? cong.serviceDays : [{ day: '', time: '19:30' }]);
+                                setTempMinistry(cong.ministry.length ? cong.ministry : [{ role: '', name: '' }]);
+                                setIsCreatingCongregation(true);
+                              }}
+                              className="p-3 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
+                            >
                               <Edit2 size={18} />
                             </button>
                             <button onClick={() => deleteCongregation(cong.id)} className="p-3 bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all">
@@ -1313,6 +1389,76 @@ export default function App() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+              {/* TAB: CONFIGURAÇÕES (CATEGORIAS E CARGOS) */}
+              {adminSubTab === ('settings' as any) && (
+                <div className="space-y-6 animate-in fade-in duration-300 pb-12">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Configurações Base</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* CATEGORIES SECTION */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                      <div className="flex items-center gap-3 text-indigo-600">
+                        <Filter size={20} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">Categorias de Congregação</h4>
+                      </div>
+
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const name = (e.currentTarget.elements.namedItem('catName') as HTMLInputElement).value;
+                        addCategory(name);
+                        e.currentTarget.reset();
+                      }} className="flex gap-2">
+                        <input name="catName" required type="text" placeholder="Ex: CENTRAL" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" />
+                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">ADD</button>
+                      </form>
+
+                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
+                        {categories.map(cat => (
+                          <div key={cat.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
+                            <span className="text-sm font-bold text-slate-700">{cat.name}</span>
+                            <button onClick={() => deleteCategory(cat.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        {categories.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhuma categoria cadastrada.</p>}
+                      </div>
+                    </div>
+
+                    {/* ROLES SECTION */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                      <div className="flex items-center gap-3 text-indigo-600">
+                        <Briefcase size={20} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">Cargos do Ministério</h4>
+                      </div>
+
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const name = (e.currentTarget.elements.namedItem('roleName') as HTMLInputElement).value;
+                        addRole(name);
+                        e.currentTarget.reset();
+                      }} className="flex gap-2">
+                        <input name="roleName" required type="text" placeholder="Ex: Ancião" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium" />
+                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">ADD</button>
+                      </form>
+
+                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
+                        {roles.map(r => (
+                          <div key={r.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
+                            <span className="text-sm font-bold text-slate-700">{r.name}</span>
+                            <button onClick={() => deleteRole(r.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        {roles.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum cargo cadastrado.</p>}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1527,9 +1673,16 @@ export default function App() {
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
                         <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                          <option value="CENTRAL">CENTRAL</option>
-                          <option value="LOCAL">LOCAL</option>
-                          <option value="DISTRITO">DISTRITO</option>
+                          {categories.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
+                          {categories.length === 0 && (
+                            <>
+                              <option value="CENTRAL">CENTRAL</option>
+                              <option value="LOCAL">LOCAL</option>
+                              <option value="DISTRITO">DISTRITO</option>
+                            </>
+                          )}
                         </select>
                       </div>
                     </div>
@@ -1558,38 +1711,149 @@ export default function App() {
                     </div>
 
                     <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
+                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
                         Dias de Culto
+                        <button
+                          type="button"
+                          onClick={() => setTempServiceDays([...tempServiceDays, { day: '', time: '19:30' }])}
+                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+                        >
+                          <Plus size={12} /> ADICIONAR DIA
+                        </button>
                       </h4>
                       <div className="space-y-3">
-                        {(selectedCongregation?.serviceDays.length ? selectedCongregation.serviceDays : [{ day: '', time: '' }]).map((sd, idx) => (
-                          <div key={idx} className="flex gap-4">
-                            <select name="serviceDay" defaultValue={sd.day} className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                        {tempServiceDays.map((sd, idx) => (
+                          <div key={idx} className="flex gap-4 items-center">
+                            <select
+                              value={sd.day}
+                              onChange={(e) => {
+                                const newDays = [...tempServiceDays];
+                                newDays[idx].day = e.target.value;
+                                setTempServiceDays(newDays);
+                              }}
+                              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                            >
                               <option value="">Selecione o Dia...</option>
                               {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
                             </select>
-                            <input name="serviceTime" defaultValue={sd.time} type="text" placeholder="19:30" className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
+                            <input
+                              value={sd.time}
+                              onChange={(e) => {
+                                const newDays = [...tempServiceDays];
+                                newDays[idx].time = e.target.value;
+                                setTempServiceDays(newDays);
+                              }}
+                              type="text"
+                              placeholder="19:30"
+                              className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setTempServiceDays(tempServiceDays.filter((_, i) => i !== idx))}
+                              className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                            >
+                              <X size={18} />
+                            </button>
                           </div>
                         ))}
+                        {tempServiceDays.length === 0 && (
+                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum dia de culto adicionado.</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between">
+                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
                         Ministério
+                        <button
+                          type="button"
+                          onClick={() => setTempMinistry([...tempMinistry, { role: '', name: '' }])}
+                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+                        >
+                          <Plus size={12} /> ADICIONAR MEMBRO
+                        </button>
                       </h4>
                       <div className="space-y-3">
-                        {(selectedCongregation?.ministry.length ? selectedCongregation.ministry : [{ role: '', name: '' }]).map((m, idx) => (
-                          <div key={idx} className="flex gap-4">
-                            <select name="ministryRole" defaultValue={m.role} className="w-40 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                              <option value="">Cargo...</option>
-                              <option value="Ancião">Ancião</option>
-                              <option value="Diácono">Diácono</option>
-                              <option value="Cooperador">Cooperador</option>
-                            </select>
-                            <input name="ministryName" defaultValue={m.name} type="text" placeholder="Nome Completo" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                        {tempMinistry.map((m, idx) => (
+                          <div key={idx} className="space-y-2 p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                            <div className="flex gap-4 items-start">
+                              <div className="flex-1 space-y-2">
+                                <select
+                                  value={m.role}
+                                  onChange={(e) => {
+                                    const newMin = [...tempMinistry];
+                                    newMin[idx].role = e.target.value;
+                                    setTempMinistry(newMin);
+                                  }}
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                                >
+                                  <option value="">Cargo...</option>
+                                  {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                                  {roles.length === 0 && (
+                                    <>
+                                      <option value="Ancião">Ancião</option>
+                                      <option value="Diácono">Diácono</option>
+                                      <option value="Cooperador">Cooperador</option>
+                                    </>
+                                  )}
+                                </select>
+
+                                <div className="relative">
+                                  <input
+                                    value={m.name}
+                                    onChange={(e) => {
+                                      const newMin = [...tempMinistry];
+                                      newMin[idx].name = e.target.value;
+                                      newMin[idx].profileId = undefined; // Reset if typing
+                                      setTempMinistry(newMin);
+                                    }}
+                                    type="text"
+                                    placeholder="Nome ou busque no sistema..."
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                                  />
+                                  {/* Lookup Results Box would go here, for now let's simplify with a datalist or similar if possible */}
+                                  {m.name.length > 2 && !m.profileId && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto no-scrollbar">
+                                      {allProfiles
+                                        .filter(p => p.name.toLowerCase().includes(m.name.toLowerCase()))
+                                        .map(p => (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => {
+                                              const newMin = [...tempMinistry];
+                                              newMin[idx].name = p.name;
+                                              newMin[idx].profileId = p.id;
+                                              setTempMinistry(newMin);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors"
+                                          >
+                                            <span className="font-bold">{p.name}</span>
+                                            <span className="text-[10px] text-slate-400 ml-2 italic">({p.instrument})</span>
+                                          </button>
+                                        ))}
+                                    </div>
+                                  )}
+                                  {m.profileId && (
+                                    <div className="absolute right-2 top-1.5 bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest flex items-center gap-1">
+                                      <CheckCircle size={10} /> VINCULADO
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setTempMinistry(tempMinistry.filter((_, i) => i !== idx))}
+                                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-slate-100 mt-0.5"
+                              >
+                                <X size={18} />
+                              </button>
+                            </div>
                           </div>
                         ))}
+                        {tempMinistry.length === 0 && (
+                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum membro do ministério adicionado.</p>
+                        )}
                       </div>
                     </div>
 

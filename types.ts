@@ -30,9 +30,21 @@ export interface UserProfile {
   role: UserRole;
 }
 
+export interface CongregationCategory {
+  id: number;
+  name: string;
+}
+
+export interface MinistryRole {
+  id: number;
+  name: string;
+}
+
 export interface Ministry {
+  id?: number;
   role: string;
   name: string;
+  profileId?: string;
 }
 
 export interface ServiceDay {
