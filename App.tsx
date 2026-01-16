@@ -172,6 +172,7 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void; a
           <button
             onClick={onConfirm}
             className="w-full md:w-fit bg-white text-slate-900 px-6 py-3.5 md:py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-slate-100 hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
+            style={styles.isHex ? { backgroundColor: styles.hex, color: 'white' } : {}}
           >
             Confirmar presença <ChevronRight size={16} />
           </button>
@@ -1242,7 +1243,11 @@ export default function App() {
 
                       {!event.canceled && !isPast && (
                         <div className="mt-6 flex flex-wrap gap-2">
-                          <button onClick={() => { setSelectedEvent(event); setIsConfirming(true); }} className={`text-white text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 active:scale-95 transition-all shadow-lg ${styles.card}`}>
+                          <button
+                            onClick={() => { setSelectedEvent(event); setIsConfirming(true); }}
+                            className={`text-white text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 active:scale-95 transition-all shadow-lg ${styles.card}`}
+                            style={styles.isHex ? { backgroundColor: styles.hex } : {}}
+                          >
                             <CheckCircle size={14} /> Confirmar Presença
                           </button>
                           <a href={getGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer" className="bg-slate-100 text-slate-700 text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-colors">
