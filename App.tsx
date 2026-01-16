@@ -9,7 +9,29 @@ import ImageCropperModal from './components/ImageCropper';
 import Auth from './components/Auth';
 
 // --- Utility: Type Colors ---
-const getTypeStyles = (type: EventType) => {
+// --- Utility: Type Colors ---
+const getTypeStyles = (type: string, allTypes: EventTypeDefinition[] = []) => {
+  // 1. Try to find dynamic definition first
+  const dynamicDef = allTypes.find(t => t.name === type || t.value === type);
+
+  if (dynamicDef) {
+    // Heuristic to derive palette from the main 'bg-' class
+    // e.g. 'bg-indigo-600' -> bg: 'bg-indigo-100', text: 'text-indigo-600'
+    const baseColor = dynamicDef.color.replace('bg-', '');
+    // Split to get color name (indigo) and shade (600)
+    const parts = baseColor.split('-');
+    const colorName = parts[0];
+    // If it's a complex color string, might fail, but standard tailwind classes work:
+
+    return {
+      bg: `bg-${colorName}-100`,
+      text: `text-${colorName}-700`, // slightly darker for text
+      dot: dynamicDef.color,
+      card: dynamicDef.color
+    };
+  }
+
+  // 2. Fallback to hardcoded defaults
   switch (type) {
     case EventType.REGIONAL: return { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500', card: 'bg-amber-500' };
     case EventType.BATISMO: return { bg: 'bg-sky-100', text: 'text-sky-700', dot: 'bg-sky-500', card: 'bg-sky-500' };
@@ -19,7 +41,7 @@ const getTypeStyles = (type: EventType) => {
   }
 };
 
-const getFriendlyEventName = (type: EventType) => {
+const getFriendlyEventName = (type: string) => {
   if (type === EventType.LOCAL) return 'Ensaio Local';
   if (type === EventType.REGIONAL) return 'Ensaio Regional';
   return type;
@@ -84,8 +106,8 @@ const DashboardStatCard: React.FC<{
   );
 };
 
-const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void }> = ({ event, onConfirm }) => {
-  const styles = getTypeStyles(event.type);
+const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void; allTypes: EventTypeDefinition[] }> = ({ event, onConfirm, allTypes }) => {
+  const styles = getTypeStyles(event.type, allTypes);
   const eventName = getFriendlyEventName(event.type);
 
   return (
@@ -147,8 +169,8 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void }>
   );
 };
 
-const EventSummaryCard: React.FC<{ event: RehearsalEvent; onClick: () => void }> = ({ event, onClick }) => {
-  const styles = getTypeStyles(event.type);
+const EventSummaryCard: React.FC<{ event: RehearsalEvent; onClick: () => void; allTypes: EventTypeDefinition[] }> = ({ event, onClick, allTypes }) => {
+  const styles = getTypeStyles(event.type, allTypes);
   const Icon = event.type === EventType.BATISMO ? Droplets :
     event.type === EventType.BUSCA_DONS ? Sparkles :
       event.type === EventType.REUNIAO_MOCIDADE ? Users : Calendar;
@@ -1087,6 +1109,7 @@ export default function App() {
                           key={event.id}
                           event={event}
                           onConfirm={() => { setSelectedEvent(event); setIsConfirming(true); }}
+                          allTypes={eventTypeList}
                         />
                       ))
                     ) : (
@@ -1108,6 +1131,7 @@ export default function App() {
                           key={event.id}
                           event={event}
                           onClick={() => { setSelectedEvent(event); setIsConfirming(true); }}
+                          allTypes={eventTypeList}
                         />
                       ))
                     ) : (
@@ -1173,7 +1197,7 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-12">
                 {filteredEvents.map((event) => {
-                  const styles = getTypeStyles(event.type);
+                  const styles = getTypeStyles(event.type, eventTypeList);
                   const isPast = event.fullDate < today;
                   return (
                     <div key={event.id} className={`bg-white border ${event.canceled || isPast ? 'opacity-50 grayscale-[0.5]' : 'border-slate-100'} p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all relative overflow-hidden group`}>
