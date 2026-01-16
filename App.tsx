@@ -1363,8 +1363,50 @@ export default function App() {
                   <p className="text-slate-500 font-medium">Gestão centralizada do sistema 2026.</p>
                 </div>
 
-                {/* Professional Sub-menu with horizontal scroll awareness */}
-                <div className="relative">
+                {/* Responsive Admin Menu */}
+
+                {/* Mobile View: Floating Pills */}
+                <div className="md:hidden overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 flex gap-2 snap-x">
+                  <button
+                    onClick={() => setAdminSubTab('events')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'events' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <Calendar size={14} /> EVENTOS
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('congregations')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'congregations' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <Landmark size={14} /> CONGREGAÇÕES
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('conductors')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'conductors' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <Users size={14} /> ENCARREGADOS
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('confirmations')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'confirmations' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <CheckCircle size={14} /> CONFIRMAÇÕES
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('users')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'users' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <UserPlus size={14} /> MEMBROS
+                  </button>
+                  <button
+                    onClick={() => setAdminSubTab('settings')}
+                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    <Settings size={14} /> CONFIGS
+                  </button>
+                </div>
+
+                {/* Desktop View: Original Container Layout */}
+                <div className="hidden md:block relative">
                   <div className="bg-white border border-slate-100 p-1.5 rounded-[1.5rem] shadow-sm flex overflow-x-auto no-scrollbar gap-1 w-full">
                     <button
                       onClick={() => setAdminSubTab('events')}
@@ -1403,8 +1445,6 @@ export default function App() {
                       <Settings size={14} /> CONFIGS
                     </button>
                   </div>
-                  {/* Subtle indication of more items on mobile */}
-                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/80 to-transparent pointer-events-none lg:hidden rounded-r-[1.5rem]"></div>
                 </div>
               </header>
 
