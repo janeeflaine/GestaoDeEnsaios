@@ -7,6 +7,14 @@ export enum EventType {
   REUNIAO_MOCIDADE = 'Reunião da Mocidade'
 }
 
+export interface EventTypeDefinition {
+  id: number;
+  name: string;
+  value: string;
+  color: string;
+  text_color: string;
+}
+
 export enum ConductorType {
   LOCAL = 'Local',
   REGIONAL = 'Regional'

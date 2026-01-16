@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 // FORCE_RELOAD_TEST_TIMESTAMP: 1768503028047
 import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
-import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole } from './types';
+import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole, EventTypeDefinition } from './types';
 import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
 import { getGoogleCalendarUrl } from './utils/calendar';
 import { supabase } from './supabaseClient';
@@ -296,6 +296,7 @@ export default function App() {
   // Dynamic Data States
   const [categories, setCategories] = useState<CongregationCategory[]>([]);
   const [roles, setRoles] = useState<MinistryRole[]>([]);
+  const [eventTypeList, setEventTypeList] = useState<EventTypeDefinition[]>([]);
   const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
 
   // Local/Temporary States for Dynamic Forms
@@ -305,6 +306,7 @@ export default function App() {
   // Editing configurations
   const [editingCategory, setEditingCategory] = useState<CongregationCategory | null>(null);
   const [editingRole, setEditingRole] = useState<MinistryRole | null>(null);
+  const [editingEventType, setEditingEventType] = useState<EventTypeDefinition | null>(null);
 
   // Profile Form State
   const [formData, setFormData] = useState({
@@ -440,6 +442,10 @@ export default function App() {
       // Fetch Roles
       const { data: roleData } = await supabase.from('ministry_roles').select('*').order('name');
       if (roleData) setRoles(roleData);
+
+      // Fetch Event Types
+      const { data: typeData } = await supabase.from('event_types').select('*').order('name');
+      if (typeData) setEventTypeList(typeData);
 
       // Fetch All Profiles (for ministry lookup)
       const { data: profData } = await supabase.from('profiles').select('*').order('name');
@@ -838,6 +844,31 @@ export default function App() {
     }
   };
 
+  const addEventType = async (name: string, value: string, color: string, textColor: string) => {
+    if (!name || !value) return;
+    const payload = { name, value, color, text_color: textColor };
+
+    if (editingEventType) {
+      const { error } = await supabase.from('event_types').update(payload).eq('id', editingEventType.id);
+      if (!error) {
+        setEditingEventType(null);
+        await fetchInitialData();
+      } else alert('Erro ao atualizar tipo: ' + error.message);
+    } else {
+      const { error } = await supabase.from('event_types').insert(payload);
+      if (!error) await fetchInitialData();
+      else alert('Erro ao adicionar tipo: ' + error.message);
+    }
+  };
+
+  const deleteEventType = async (id: number) => {
+    if (confirm('Deseja realmente excluir este tipo de evento?')) {
+      const { error } = await supabase.from('event_types').delete().eq('id', id);
+      if (!error) await fetchInitialData();
+      else alert('Erro ao excluir: ' + error.message);
+    }
+  };
+
   const deleteRole = async (id: number) => {
     if (confirm('Deseja realmente excluir este cargo?')) {
       const { error } = await supabase.from('ministry_roles').delete().eq('id', id);
@@ -845,6 +876,8 @@ export default function App() {
       else alert('Erro ao excluir: ' + error.message);
     }
   };
+
+
 
   const deletePresence = async (id: string) => {
     if (confirm('Deseja realmente remover esta confirmação?')) {
@@ -1755,6 +1788,99 @@ export default function App() {
                           </div>
                         ))}
                         {roles.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum cargo cadastrado.</p>}
+                      </div>
+                    </div>
+
+                    {/* EVENT TYPES SECTION */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6 md:col-span-2">
+                      <div className="flex items-center gap-3 text-indigo-600">
+                        <List size={20} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">Tipos de Evento</h4>
+                      </div>
+
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.currentTarget);
+                        const name = fd.get('typeName') as string;
+                        const value = fd.get('typeValue') as string;
+                        const color = fd.get('typeColor') as string;
+                        const textColor = fd.get('typeTextColor') as string;
+                        addEventType(name, value, color, textColor);
+                        if (!editingEventType) e.currentTarget.reset();
+                      }} className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Nome (Ex: Ensaio Local)</label>
+                          <input
+                            key={editingEventType?.id || 'new-name'}
+                            name="typeName"
+                            required
+                            type="text"
+                            defaultValue={editingEventType?.name || ''}
+                            placeholder="Nome Visível"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          />
+                        </div>
+                        <div className="md:col-span-1 space-y-1">
+                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Valor Interno (Ex: LOCAL)</label>
+                          <input
+                            key={editingEventType?.id || 'new-val'}
+                            name="typeValue"
+                            required
+                            type="text"
+                            defaultValue={editingEventType?.value || ''}
+                            placeholder="VALOR_INTERNO"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
+                          />
+                        </div>
+                        <div className="md:col-span-1 space-y-1">
+                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cor</label>
+                          <select name="typeColor" defaultValue={editingEventType?.color || 'bg-slate-500'} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="bg-indigo-600">Indigo</option>
+                            <option value="bg-slate-800">Escuro</option>
+                            <option value="bg-emerald-500">Verde</option>
+                            <option value="bg-rose-500">Rosa</option>
+                            <option value="bg-sky-500">Azul</option>
+                            <option value="bg-purple-600">Roxo</option>
+                            <option value="bg-amber-500">Laranja</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-1 flex items-end gap-2">
+                          <input type="hidden" name="typeTextColor" value="text-white" />
+                          <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase h-[34px]">
+                            {editingEventType ? 'Salvar' : 'ADICIONAR'}
+                          </button>
+                          {editingEventType && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingEventType(null)}
+                              className="w-[34px] h-[34px] bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center hover:bg-slate-300"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </form>
+
+                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
+                        {eventTypeList.map(type => (
+                          <div key={type.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
+                            <div className="flex items-center gap-3">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${type.color} ${type.text_color}`}>
+                                {type.name}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{type.value}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => setEditingEventType(type)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => deleteEventType(type.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {eventTypeList.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum tipo cadastrado.</p>}
                       </div>
                     </div>
                   </div>
