@@ -291,7 +291,7 @@ export default function App() {
   const [isDeletingMember, setIsDeletingMember] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<UserProfile | null>(null);
 
-  const [creatingEventType, setCreatingEventType] = useState<EventType>(EventType.LOCAL);
+  const [creatingEventType, setCreatingEventType] = useState<string>(EventType.LOCAL);
 
   // Dynamic Data States
   const [categories, setCategories] = useState<CongregationCategory[]>([]);
@@ -2418,10 +2418,11 @@ export default function App() {
                       <select
                         name="type"
                         value={creatingEventType}
-                        onChange={(e) => setCreatingEventType(e.target.value as EventType)}
+                        onChange={(e) => setCreatingEventType(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
                       >
-                        {Object.values(EventType).map(t => <option key={t} value={t}>{t}</option>)}
+                        <option value="">Selecione...</option>
+                        {eventTypeList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                       </select>
                     </div>
 

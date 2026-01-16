@@ -91,7 +91,7 @@ export interface RehearsalEvent {
   location: string;
   time: string;
   conductor: string;
-  type: EventType;
+  type: EventType | string;
   canceled?: boolean;
 }
 
