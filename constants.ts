@@ -79,7 +79,7 @@ export const INITIAL_EVENTS: RehearsalEvent[] = rawData.split('\n').map((line, i
   const [month, dayStr, location, time, conductor, typeStr] = line.split(',');
   const day = parseInt(dayStr.split(' ')[0]);
   const fullDate = new Date(2026, monthMap[month], day);
-  
+
   let finalType = EventType.LOCAL;
   const upperType = typeStr.toUpperCase();
   if (upperType.includes('REGIONAL')) finalType = EventType.REGIONAL;
@@ -171,4 +171,21 @@ export const INITIAL_CONGREGATIONS: Congregation[] = [
       { role: 'Cooperador', name: 'DANIEL ASSIS' }
     ]
   }
+];
+
+export const EVENT_COLORS = [
+  { name: "Azul", value: "#2563EB" },
+  { name: "Azul Claro", value: "#60A5FA" },
+  { name: "Verde", value: "#16A34A" },
+  { name: "Verde Claro", value: "#4ADE80" },
+  { name: "Laranja", value: "#F97316" },
+  { name: "Amarelo", value: "#FACC15" },
+  { name: "Vermelho", value: "#DC2626" },
+  { name: "Rosa", value: "#EC4899" },
+  { name: "Roxo", value: "#7C3AED" },
+  { name: "Índigo", value: "#4F46E5" },
+  { name: "Ciano", value: "#06B6D4" },
+  { name: "Teal", value: "#14B8A6" },
+  { name: "Cinza", value: "#64748B" },
+  { name: "Preto", value: "#020617" }
 ];

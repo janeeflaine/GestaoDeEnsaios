@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 // FORCE_RELOAD_TEST_TIMESTAMP: 1768503028047
 import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
 import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole, EventTypeDefinition } from './types';
-import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS } from './constants';
+import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS, EVENT_COLORS } from './constants';
 import { getGoogleCalendarUrl } from './utils/calendar';
 import { supabase } from './supabaseClient';
 import ImageCropperModal from './components/ImageCropper';
@@ -23,21 +23,34 @@ const getTypeStyles = (type: string, allTypes: EventTypeDefinition[] = []) => {
     const colorName = parts[0];
     // If it's a complex color string, might fail, but standard tailwind classes work:
 
+    // Check if it's a HEX value (starts with #)
+    if (dynamicDef.color.startsWith('#')) {
+      return {
+        bg: 'bg-slate-100', // fallback light
+        text: 'text-slate-800', // fallback dark
+        dot: dynamicDef.color,
+        card: dynamicDef.color,
+        isHex: true,
+        hex: dynamicDef.color
+      };
+    }
+
     return {
       bg: `bg-${colorName}-100`,
-      text: `text-${colorName}-700`, // slightly darker for text
+      text: `text-${colorName}-700`,
       dot: dynamicDef.color,
-      card: dynamicDef.color
+      card: dynamicDef.color,
+      isHex: false
     };
   }
 
   // 2. Fallback to hardcoded defaults
   switch (type) {
-    case EventType.REGIONAL: return { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500', card: 'bg-amber-500' };
-    case EventType.BATISMO: return { bg: 'bg-sky-100', text: 'text-sky-700', dot: 'bg-sky-500', card: 'bg-sky-500' };
-    case EventType.BUSCA_DONS: return { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500', card: 'bg-purple-500' };
-    case EventType.REUNIAO_MOCIDADE: return { bg: 'bg-rose-100', text: 'text-rose-700', dot: 'bg-rose-500', card: 'bg-rose-500' };
-    default: return { bg: 'bg-indigo-100', text: 'text-indigo-700', dot: 'bg-indigo-500', card: 'bg-indigo-600' };
+    case EventType.REGIONAL: return { bg: 'bg-amber-100', text: 'text-amber-700', dot: 'bg-amber-500', card: 'bg-amber-500', isHex: false };
+    case EventType.BATISMO: return { bg: 'bg-sky-100', text: 'text-sky-700', dot: 'bg-sky-500', card: 'bg-sky-500', isHex: false };
+    case EventType.BUSCA_DONS: return { bg: 'bg-purple-100', text: 'text-purple-700', dot: 'bg-purple-500', card: 'bg-purple-500', isHex: false };
+    case EventType.REUNIAO_MOCIDADE: return { bg: 'bg-rose-100', text: 'text-rose-700', dot: 'bg-rose-500', card: 'bg-rose-500', isHex: false };
+    default: return { bg: 'bg-indigo-100', text: 'text-indigo-700', dot: 'bg-indigo-500', card: 'bg-indigo-600', isHex: false };
   }
 };
 
@@ -111,7 +124,10 @@ const LargeEventCard: React.FC<{ event: RehearsalEvent; onConfirm: () => void; a
   const eventName = getFriendlyEventName(event.type);
 
   return (
-    <section className={`rounded-[2.5rem] p-5 md:p-6 text-white relative overflow-hidden shadow-xl transition-all duration-500 ${styles.card}`}>
+    <section
+      className={`rounded-[2.5rem] p-5 md:p-6 text-white relative overflow-hidden shadow-xl transition-all duration-500 ${styles.isHex ? '' : styles.card}`}
+      style={styles.isHex ? { backgroundColor: styles.hex } : {}}
+    >
       <div className="relative z-10 space-y-3 md:space-y-4">
         {/* Header - Compact */}
         <div className="flex items-center gap-2 opacity-90">
@@ -177,7 +193,10 @@ const EventSummaryCard: React.FC<{ event: RehearsalEvent; onClick: () => void; a
 
   return (
     <div onClick={onClick} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 cursor-pointer hover:border-slate-300 transition-all active:scale-95 group">
-      <div className={`${styles.bg} ${styles.text} p-3 rounded-xl group-hover:scale-110 transition-transform`}>
+      <div
+        className={`${styles.bg} ${styles.text} p-3 rounded-xl group-hover:scale-110 transition-transform`}
+        style={styles.isHex ? { backgroundColor: `${styles.hex}20`, color: styles.hex } : {}}
+      >
         <Icon size={20} />
       </div>
       <div className="flex-1 min-w-0">
@@ -1202,7 +1221,10 @@ export default function App() {
                   return (
                     <div key={event.id} className={`bg-white border ${event.canceled || isPast ? 'opacity-50 grayscale-[0.5]' : 'border-slate-100'} p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all relative overflow-hidden group`}>
                       <div className="flex justify-between items-start mb-4">
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] ${styles.bg} ${styles.text}`}>
+                        <span
+                          className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] ${styles.bg} ${styles.text}`}
+                          style={styles.isHex ? { backgroundColor: `${styles.hex}20`, color: styles.hex } : {}}
+                        >
                           {event.type}
                         </span>
                         <span className="text-slate-400 text-sm font-bold">{event.day} {event.month}</span>
@@ -1210,8 +1232,12 @@ export default function App() {
 
                       <h3 className={`text-xl font-black tracking-tight ${event.canceled ? 'line-through text-slate-400' : 'text-slate-800'}`}>{event.location}</h3>
                       <div className="mt-3 space-y-2 text-slate-500 text-sm">
-                        <p className="flex items-center gap-2 font-medium"><Layout size={16} className={styles.text} /> {event.time}</p>
-                        <p className="flex items-center gap-2 font-medium"><User size={16} className={styles.text} /> {event.conductor}</p>
+                        <p className="flex items-center gap-2 font-medium">
+                          <Layout size={16} className={styles.text} style={styles.isHex ? { color: styles.hex } : {}} /> {event.time}
+                        </p>
+                        <p className="flex items-center gap-2 font-medium">
+                          <User size={16} className={styles.text} style={styles.isHex ? { color: styles.hex } : {}} /> {event.conductor}
+                        </p>
                       </div>
 
                       {!event.canceled && !isPast && (
@@ -1856,940 +1882,963 @@ export default function App() {
                             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
                           />
                         </div>
-                        <div className="md:col-span-1 space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cor</label>
-                          <select name="typeColor" defaultValue={editingEventType?.color || 'bg-slate-500'} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20">
-                            <option value="bg-indigo-600">Indigo</option>
-                            <option value="bg-slate-800">Escuro</option>
-                            <option value="bg-emerald-500">Verde</option>
-                            <option value="bg-rose-500">Rosa</option>
-                            <option value="bg-sky-500">Azul</option>
-                            <option value="bg-purple-600">Roxo</option>
-                            <option value="bg-amber-500">Laranja</option>
-                          </select>
-                        </div>
-                        <div className="md:col-span-1 flex items-end gap-2">
-                          <input type="hidden" name="typeTextColor" value="text-white" />
-                          <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase h-[34px]">
-                            {editingEventType ? 'Salvar' : 'ADICIONAR'}
-                          </button>
-                          {editingEventType && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingEventType(null)}
-                              className="w-[34px] h-[34px] bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center hover:bg-slate-300"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </form>
-
-                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
-                        {eventTypeList.map(type => (
-                          <div key={type.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
-                            <div className="flex items-center gap-3">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${type.color} ${type.text_color}`}>
-                                {type.name}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{type.value}</span>
-                            </div>
-                            <div className="flex gap-1">
-                              <button onClick={() => setEditingEventType(type)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <Edit2 size={14} />
-                              </button>
-                              <button onClick={() => deleteEventType(type.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {eventTypeList.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum tipo cadastrado.</p>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: MEMBROS (USUÁRIOS) */}
-              {adminSubTab === 'users' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Membros</h3>
-                    <div className="relative w-full md:w-80">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input
-                        type="text"
-                        placeholder="Buscar usuário..."
-                        value={presenceSearch}
-                        onChange={(e) => setPresenceSearch(e.target.value)}
-                        className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
-                    <div className="overflow-x-auto no-scrollbar">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                            <th className="px-6 py-5">Nome / E-mail</th>
-                            <th className="px-6 py-5">Cargo / Tipo</th>
-                            <th className="px-6 py-5">Instrumento</th>
-                            <th className="px-6 py-5 text-right">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-sm divide-y divide-slate-50">
-                          {allProfiles
-                            .filter(p =>
-                              p.name.toLowerCase().includes(presenceSearch.toLowerCase()) ||
-                              p.email.toLowerCase().includes(presenceSearch.toLowerCase())
-                            )
-                            .map((profile) => (
-                              <tr key={profile.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="px-6 py-5">
-                                  <div className="flex items-center gap-3">
-                                    <div className="bg-slate-100 text-slate-400 p-2.5 rounded-xl">
-                                      <User size={18} />
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-slate-800 tracking-tight">{profile.name}</span>
-                                      <span className="text-[10px] text-slate-400 font-medium">{profile.email}</span>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-5">
-                                  <select
-                                    className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-indigo-600 outline-none cursor-pointer"
-                                    value={profile.role}
-                                    onChange={(e) => updateUserProfile(profile.id, { role: e.target.value as any })}
-                                  >
-                                    <option value="USER">Comum</option>
-                                    <option value="MUSICIAN">Músico</option>
-                                    <option value="ADMIN">Admin</option>
-                                  </select>
-                                </td>
-                                <td className="px-6 py-5">
-                                  <select
-                                    className="bg-transparent border-none text-xs font-bold text-slate-600 outline-none cursor-pointer"
-                                    value={profile.instrument}
-                                    onChange={(e) => updateUserProfile(profile.id, { instrument: e.target.value })}
-                                  >
-                                    {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                                  </select>
-                                </td>
-                                <td className="px-6 py-5 text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
-                                      className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
-                                    >
-                                      <Edit2 size={16} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setMemberToDelete(profile); setIsDeletingMember(true); }}
-                                      className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all shadow-sm active:scale-90"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: ENCARREGADOS */}
-              {adminSubTab === 'conductors' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Perfis</h3>
-                    <button
-                      onClick={() => { setSelectedConductor(null); setIsCreatingConductor(true); }}
-                      className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
-                    >
-                      <Plus size={16} /> NOVO PERFIL
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-                    {conductors.map(conductor => (
-                      <ConductorProfileCard
-                        key={conductor.id}
-                        conductor={conductor}
-                        onEdit={() => { setSelectedConductor(conductor); setIsCreatingConductor(true); }}
-                        onDelete={() => deleteConductor(conductor.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: CONFIRMAÇÕES */}
-              {adminSubTab === 'confirmations' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Lista de Confirmados</h3>
-                    <div className="relative w-full md:w-80">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input
-                        type="text"
-                        placeholder="Busca rápida..."
-                        value={presenceSearch}
-                        onChange={(e) => setPresenceSearch(e.target.value)}
-                        className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
-                    <div className="overflow-x-auto no-scrollbar">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                            <th className="px-6 py-5">Músico</th>
-                            <th className="px-6 py-5">Instrumento</th>
-                            <th className="px-6 py-5">Evento</th>
-                            <th className="px-6 py-5">Congregação / Local</th>
-                            <th className="px-6 py-5 text-right">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-sm divide-y divide-slate-50">
-                          {filteredPresences.length > 0 ? (
-                            filteredPresences.map((presence) => {
-                              const event = events.find(e => e.id === presence.eventId);
-                              const eventName = event ? getFriendlyEventName(event.type) : 'Evento';
-                              const eventStyles = event ? getTypeStyles(event.type) : { text: 'text-slate-500', bg: 'bg-slate-100' };
-
-                              return (
-                                <tr key={presence.id} className="hover:bg-slate-50/80 transition-colors">
-                                  <td className="px-6 py-5">
-                                    <div className="flex items-center gap-3">
-                                      <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
-                                        <User size={16} />
-                                      </div>
-                                      <div>
-                                        <span className="font-bold block text-slate-800 tracking-tight leading-none truncate max-w-[120px]">{presence.name}</span>
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium mt-1 uppercase tracking-tighter italic">{presence.phone || 'Sem Telefone'}</span>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-5">
-                                    <div className="flex items-center gap-2">
-                                      <Music size={14} className="text-slate-400" />
-                                      <span className="font-semibold text-slate-700 text-xs truncate max-w-[80px]">{presence.instrument}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-5">
-                                    <div className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase w-fit ${eventStyles.bg} ${eventStyles.text}`}>
-                                      {eventName}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-5">
-                                    <div className="flex items-center gap-2">
-                                      <MapPin size={14} className="text-emerald-500" />
-                                      <div>
-                                        <span className="font-bold block text-slate-800 tracking-tight text-xs uppercase tracking-tighter leading-none">{event?.location || 'Não informado'}</span>
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 block">{event?.day.split(' ')[0]} {event?.month}</span>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-5 text-right">
-                                    <button onClick={() => deletePresence(presence.id)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-90">
-                                      <Trash2 size={18} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic font-medium">
-                                <ClipboardList size={32} className="mx-auto mb-2 opacity-20" />
-                                Nenhuma confirmação encontrada para os filtros aplicados.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-          }
-
-          {/* MODALS */}
-          {/* PRESENCE MODAL */}
-          {
-            isConfirming && selectedEvent && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${getTypeStyles(selectedEvent.type).card}`}>
-                    <div className="relative z-10">
-                      <h3 className="text-2xl font-black tracking-tight">Confirmar Presença</h3>
-                      <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">{getFriendlyEventName(selectedEvent.type)} • {selectedEvent.location}</p>
-                    </div>
-                    <button onClick={() => setIsConfirming(false)} className="bg-white/20 p-3 rounded-2xl hover:bg-white/30 transition-all relative z-10 active:scale-90">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleConfirmPresence} className="p-10 space-y-6">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome Completo
-                      </label>
-                      <input
-                        required
-                        name="name"
-                        defaultValue={userProfile?.name}
-                        type="text"
-                        placeholder="Seu nome completo"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                          <Music size={14} /> Instrumento
-                        </label>
-                        <select
-                          name="instrument"
-                          defaultValue={userProfile?.instrument}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        >
-                          {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                          <Phone size={14} /> WhatsApp
-                        </label>
-                        <input
-                          name="phone"
-                          defaultValue={userProfile?.phone}
-                          type="tel"
-                          placeholder="(00) 00000-0000"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    <button type="submit" className={`w-full text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:scale-[1.02] ${getTypeStyles(selectedEvent.type).card}`}>
-                      Confirmar agora <ChevronRight size={20} />
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* CREATE CONGREGATION MODAL */}
-          {
-            isCreatingCongregation && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center flex-shrink-0">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedCongregation ? 'Editar Congregação' : 'Nova Congregação'}</h3>
-                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Sedes e Locais de Culto</p>
-                    </div>
-                    <button onClick={() => setIsCreatingCongregation(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateCongregation} className="p-8 overflow-y-auto space-y-8 no-scrollbar">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Landmark size={14} /> Nome da Congregação</label>
-                        <input required name="name" defaultValue={selectedCongregation?.name} type="text" placeholder="Ex: Santa Terezinha" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
-                        <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.name}>{cat.name}</option>
-                          ))}
-                          {categories.length === 0 && (
-                            <>
-                              <option value="CENTRAL">CENTRAL</option>
-                              <option value="LOCAL">LOCAL</option>
-                              <option value="DISTRITO">DISTRITO</option>
-                            </>
-                          )}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2">Localização</h4>
-                      <div className="grid grid-cols-1 gap-5">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logradouro</label>
-                          <input required name="address" defaultValue={selectedCongregation?.address} type="text" placeholder="Rua, Número, Bairro" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
-                            <input name="cep" defaultValue={selectedCongregation?.cep} type="text" placeholder="00000-000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                          </div>
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cidade / Estado</label>
-                            <div className="flex gap-3">
-                              <input required name="city" defaultValue={selectedCongregation?.city} type="text" placeholder="Cidade" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                              <input required name="state" defaultValue={selectedCongregation?.state || 'MG'} type="text" placeholder="UF" className="w-20 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
-                        Dias de Culto
-                        <button
-                          type="button"
-                          onClick={() => setTempServiceDays([...tempServiceDays, { day: '', time: '19:30' }])}
-                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
-                        >
-                          <Plus size={12} /> ADICIONAR DIA
-                        </button>
-                      </h4>
-                      <div className="space-y-3">
-                        {tempServiceDays.map((sd, idx) => (
-                          <div key={idx} className="flex gap-4 items-center">
-                            <select
-                              value={sd.day}
-                              onChange={(e) => {
-                                const newDays = [...tempServiceDays];
-                                newDays[idx].day = e.target.value;
-                                setTempServiceDays(newDays);
-                              }}
-                              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                            >
-                              <option value="">Selecione o Dia...</option>
-                              {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                            <input
-                              value={sd.time}
-                              onChange={(e) => {
-                                const newDays = [...tempServiceDays];
-                                newDays[idx].time = e.target.value;
-                                setTempServiceDays(newDays);
-                              }}
-                              type="text"
-                              placeholder="19:30"
-                              className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setTempServiceDays(tempServiceDays.filter((_, i) => i !== idx))}
-                              className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-                        ))}
-                        {tempServiceDays.length === 0 && (
-                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum dia de culto adicionado.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
-                        Ministério
-                        <button
-                          type="button"
-                          onClick={() => setTempMinistry([...tempMinistry, { role: '', name: '' }])}
-                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
-                        >
-                          <Plus size={12} /> ADICIONAR MEMBRO
-                        </button>
-                      </h4>
-                      <div className="space-y-3">
-                        {tempMinistry.map((m, idx) => (
-                          <div key={idx} className="space-y-2 p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100">
-                            <div className="flex gap-4 items-start">
-                              <div className="flex-1 space-y-2">
-                                <select
-                                  value={m.role}
-                                  onChange={(e) => {
-                                    const newMin = [...tempMinistry];
-                                    newMin[idx].role = e.target.value;
-                                    setTempMinistry(newMin);
-                                  }}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                                >
-                                  <option value="">Cargo...</option>
-                                  {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                                  {roles.length === 0 && (
-                                    <>
-                                      <option value="Ancião">Ancião</option>
-                                      <option value="Diácono">Diácono</option>
-                                      <option value="Cooperador">Cooperador</option>
-                                    </>
-                                  )}
-                                </select>
-
-                                <div className="relative">
-                                  <input
-                                    value={m.name}
-                                    onChange={(e) => {
-                                      const newMin = [...tempMinistry];
-                                      newMin[idx].name = e.target.value;
-                                      newMin[idx].profileId = undefined; // Reset if typing
-                                      setTempMinistry(newMin);
-                                    }}
-                                    type="text"
-                                    placeholder="Nome ou busque no sistema..."
-                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                                  />
-                                  {/* Lookup Results Box would go here, for now let's simplify with a datalist or similar if possible */}
-                                  {m.name.length > 2 && !m.profileId && (
-                                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto no-scrollbar">
-                                      {allProfiles
-                                        .filter(p => p.name.toLowerCase().includes(m.name.toLowerCase()))
-                                        .map(p => (
-                                          <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => {
-                                              const newMin = [...tempMinistry];
-                                              newMin[idx].name = p.name;
-                                              newMin[idx].profileId = p.id;
-                                              setTempMinistry(newMin);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors"
-                                          >
-                                            <span className="font-bold">{p.name}</span>
-                                            <span className="text-[10px] text-slate-400 ml-2 italic">({p.instrument})</span>
-                                          </button>
-                                        ))}
-                                    </div>
-                                  )}
-                                  {m.profileId && (
-                                    <div className="absolute right-2 top-1.5 bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest flex items-center gap-1">
-                                      <CheckCircle size={10} /> VINCULADO
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                        <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cor do Evento</label>
+                        <div className="relative group">
+                          <input type="hidden" name="typeColor" value={editingEventType?.color || '#2563EB'} id="typeColorInput" />
+                          <div className="grid grid-cols-7 gap-2 p-3 bg-white border border-slate-200 rounded-xl">
+                            {EVENT_COLORS.map(c => (
                               <button
+                                key={c.value}
                                 type="button"
-                                onClick={() => setTempMinistry(tempMinistry.filter((_, i) => i !== idx))}
-                                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-slate-100 mt-0.5"
-                              >
-                                <X size={18} />
-                              </button>
+                                title={c.name}
+                                onClick={() => {
+                                  const input = document.getElementById('typeColorInput') as HTMLInputElement;
+                                  if (input) input.value = c.value;
+                                  // Visual feedback hack since we don't have dedicated state for this form yet
+                                  const allBtns = document.querySelectorAll('.color-btn-visual');
+                                  allBtns.forEach(b => b.classList.remove('ring-2', 'ring-offset-2', 'ring-indigo-500'));
+                                  document.getElementById(`btn-${c.value}`)?.classList.add('ring-2', 'ring-offset-2', 'ring-indigo-500');
+                                }}
+                                id={`btn-${c.value}`}
+                                className={`color-btn-visual w-6 h-6 rounded-full shadow-sm hover:scale-110 transition-transform ${editingEventType?.color === c.value ? 'ring-2 ring-offset-2 ring-indigo-500' : ''}`}
+                                style={{ backgroundColor: c.value }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                    </div>
+                    <div className="md:col-span-1 flex items-end gap-2">
+                      <input type="hidden" name="typeTextColor" value="text-white" />
+                      <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase h-[34px]">
+                        {editingEventType ? 'Salvar' : 'ADICIONAR'}
+                      </button>
+                      {editingEventType && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingEventType(null)}
+                          className="w-[34px] h-[34px] bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center hover:bg-slate-300"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
+                    {eventTypeList.map(type => (
+                      <div key={type.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${type.color} ${type.text_color}`}>
+                            {type.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{type.value}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => setEditingEventType(type)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => deleteEventType(type.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {eventTypeList.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum tipo cadastrado.</p>}
+                  </div>
+                </div>
+                  </div>
+                </div>
+      )}
+
+      {/* TAB: MEMBROS (USUÁRIOS) */}
+      {adminSubTab === 'users' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Membros</h3>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Buscar usuário..."
+                value={presenceSearch}
+                onChange={(e) => setPresenceSearch(e.target.value)}
+                className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
+            <div className="overflow-x-auto no-scrollbar">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    <th className="px-6 py-5">Nome / E-mail</th>
+                    <th className="px-6 py-5">Cargo / Tipo</th>
+                    <th className="px-6 py-5">Instrumento</th>
+                    <th className="px-6 py-5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm divide-y divide-slate-50">
+                  {allProfiles
+                    .filter(p =>
+                      p.name.toLowerCase().includes(presenceSearch.toLowerCase()) ||
+                      p.email.toLowerCase().includes(presenceSearch.toLowerCase())
+                    )
+                    .map((profile) => (
+                      <tr key={profile.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-slate-100 text-slate-400 p-2.5 rounded-xl">
+                              <User size={18} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-800 tracking-tight">{profile.name}</span>
+                              <span className="text-[10px] text-slate-400 font-medium">{profile.email}</span>
                             </div>
                           </div>
-                        ))}
-                        {tempMinistry.length === 0 && (
-                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum membro do ministério adicionado.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-4 flex-shrink-0">
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        {selectedCongregation ? 'Atualizar Congregação' : 'Cadastrar Congregação'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* CREATE EVENT MODAL */}
-          {
-            isCreatingEvent && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : 'Novo Evento 2026'}</h3>
-                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{selectedEvent ? 'Atualização de Agendamento' : 'Configuração do Cronograma'}</p>
-                    </div>
-                    <button onClick={() => { setIsCreatingEvent(false); setSelectedEvent(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateEvent} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <MapPin size={14} /> Localização / Distrito
-                      </label>
-                      <select required name="location" defaultValue={selectedEvent?.location} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value="">Selecione o Local...</option>
-                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <List size={14} /> Tipo de Evento
-                      </label>
-                      <select
-                        name="type"
-                        value={creatingEventType}
-                        onChange={(e) => setCreatingEventType(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        <option value="">Selecione...</option>
-                        {eventTypeList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div className={`space-y-1.5 transition-opacity ${isConductorDisabled ? 'opacity-40' : 'opacity-100'}`}>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Encarregado
-                      </label>
-                      <input
-                        required={!isConductorDisabled}
-                        disabled={isConductorDisabled}
-                        name="conductor"
-                        defaultValue={selectedEvent?.conductor}
-                        type="text"
-                        placeholder={isConductorDisabled ? "N/A" : "Nome do encarregado"}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium ${isConductorDisabled ? 'cursor-not-allowed' : ''}`}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Calendar size={14} /> Mês
-                      </label>
-                      <select name="month" defaultValue={selectedEvent?.month} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Número)</label>
-                        <input required name="day" defaultValue={selectedEvent?.day.split(' ')[0]} type="number" min="1" max="31" placeholder="Ex: 15" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Semana)</label>
-                        <select name="weekday" defaultValue={selectedEvent?.day.split('(')[1]?.replace(')', '')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(w => <option key={w} value={w}>{w}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Clock size={14} /> Horário
-                      </label>
-                      <input required name="time" defaultValue={selectedEvent?.time} type="text" placeholder="Ex: 17:00h" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="md:col-span-2 pt-4">
-                      <button type="submit" className="w-full bg-slate-800 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-slate-900">
-                        {selectedEvent ? 'Salvar Alterações' : 'Salvar Novo Evento'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {
-            isCreatingConductor && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedConductor ? 'Editar Perfil' : 'Novo Encarregado'}</h3>
-                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Perfis de Música</p>
-                    </div>
-                    <button onClick={() => { setIsCreatingConductor(false); setSelectedConductor(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateConductor} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome do Encarregado
-                      </label>
-                      <input required name="name" defaultValue={selectedConductor?.name} type="text" placeholder="Nome Completo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Calendar size={14} /> Idade
-                      </label>
-                      <input required name="age" defaultValue={selectedConductor?.age} type="number" placeholder="Anos" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Music size={14} /> Instrumento
-                      </label>
-                      <select name="instrument" defaultValue={selectedConductor?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <MapPin size={14} /> Congregação Comum
-                      </label>
-                      <select name="congregation" defaultValue={selectedConductor?.congregation} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value="">Selecione...</option>
-                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <List size={14} /> Tipo
-                      </label>
-                      <select name="type" defaultValue={selectedConductor?.type || ConductorType.LOCAL} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value={ConductorType.LOCAL}>Local</option>
-                        <option value={ConductorType.REGIONAL}>Regional</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Camera size={14} /> URL da Foto (Opcional)
-                      </label>
-                      <input name="photoUrl" defaultValue={selectedConductor?.photoUrl} type="url" placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="md:col-span-2 pt-4">
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        {selectedConductor ? 'Salvar Alterações' : 'Cadastrar Perfil'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* DELETE MEMBER CONFIRMATION MODAL */}
-          {isDeletingMember && memberToDelete && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
-                <div className="p-8 bg-red-600 text-white text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Trash2 size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold tracking-tight">Excluir Membro</h3>
-                  <p className="text-white/80 text-sm mt-1">Deseja realmente remover este usuário do sistema?</p>
-                </div>
-                <div className="p-8 space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
-                    <div className="bg-white p-2 rounded-xl text-slate-400">
-                      <User size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{memberToDelete.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 pt-2">
-                    <button
-                      onClick={() => handleDeleteMember(memberToDelete)}
-                      className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      EXCLUIR AGORA
-                    </button>
-                    <button
-                      onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
-                      className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
-                    >
-                      CANCELAR
-                    </button>
-                  </div>
-                </div>
-              </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <select
+                            className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-indigo-600 outline-none cursor-pointer"
+                            value={profile.role}
+                            onChange={(e) => updateUserProfile(profile.id, { role: e.target.value as any })}
+                          >
+                            <option value="USER">Comum</option>
+                            <option value="MUSICIAN">Músico</option>
+                            <option value="ADMIN">Admin</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-5">
+                          <select
+                            className="bg-transparent border-none text-xs font-bold text-slate-600 outline-none cursor-pointer"
+                            value={profile.instrument}
+                            onChange={(e) => updateUserProfile(profile.id, { instrument: e.target.value })}
+                          >
+                            {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
+                              className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setMemberToDelete(profile); setIsDeletingMember(true); }}
+                              className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all shadow-sm active:scale-90"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          {/* EDIT MEMBER MODAL */}
-          {isMemberModalOpen && memberToEdit && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
-                <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
-                  <div>
-                    <h3 className="text-xl font-bold tracking-tight">Editar Membro</h3>
-                    <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Gestão Administrativa de Perfil</p>
-                  </div>
-                  <button onClick={() => { setIsMemberModalOpen(false); setMemberToEdit(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                    <X size={24} />
-                  </button>
-                </div>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
-                    const congId = fd.get('congregationId') as string;
-                    const updates = {
-                      name: fd.get('name') as string,
-                      phone: fd.get('phone') as string,
-                      instrument: fd.get('instrument') as string,
-                      role: fd.get('role') as any,
-                      congregation_id: congId || null,
-                    };
-                    await updateUserProfile(memberToEdit.id, updates as any);
-                    setIsMemberModalOpen(false);
-                    setMemberToEdit(null);
-                  }}
-                  className="p-8 space-y-5"
-                >
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <User size={14} /> Nome Completo
-                    </label>
-                    <input
-                      name="name"
-                      required
-                      defaultValue={memberToEdit.name}
-                      type="text"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Briefcase size={14} /> Nível de Acesso
-                      </label>
-                      <select
-                        name="role"
-                        defaultValue={memberToEdit.role}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        <option value="USER">COMUM</option>
-                        <option value="MUSICIAN">MÚSICO</option>
-                        <option value="ADMIN">ADMINISTRADOR</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Music size={14} /> Instrumento
-                      </label>
-                      <select
-                        name="instrument"
-                        defaultValue={memberToEdit.instrument}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Phone size={14} /> WhatsApp
-                    </label>
-                    <input
-                      name="phone"
-                      defaultValue={memberToEdit.phone}
-                      type="tel"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Landmark size={14} /> Congregação Comum
-                    </label>
-                    <select
-                      name="congregationId"
-                      defaultValue={memberToEdit.congregation_id || ''}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    >
-                      <option value="">Selecione...</option>
-                      {congregations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="pt-4">
-                    <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                      SALVAR ALTERAÇÕES <ChevronRight size={20} />
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* DELETE CONFIRMATION MODAL */}
-          {isDeletingMember && memberToDelete && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
-              <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-8 bg-red-600 text-white text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Trash2 size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold tracking-tight">Confirmar Exclusão</h3>
-                  <p className="text-white/80 text-sm mt-2">Deseja realmente excluir este membro? Esta ação não pode ser desfeita.</p>
-                </div>
-                <div className="p-8 space-y-3">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Membro</p>
-                    <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
-                    <p className="text-xs text-slate-500">{memberToDelete.email}</p>
-                  </div>
-                  <div className="flex flex-col gap-2 pt-2">
-                    <button
-                      onClick={() => handleDeleteMember(memberToDelete)}
-                      className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      EXCLUIR AGORA
-                    </button>
-                    <button
-                      onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
-                      className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
-                    >
-                      CANCELAR
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </main>
+          </div>
+        </div>
       )}
 
-      {isCropping && imageToCrop && (
-        <ImageCropperModal
-          image={imageToCrop}
-          onCropComplete={onCropComplete}
-          onCancel={() => {
-            setIsCropping(false);
-            setImageToCrop(null);
-          }}
-        />
+      {/* TAB: ENCARREGADOS */}
+      {adminSubTab === 'conductors' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Perfis</h3>
+            <button
+              onClick={() => { setSelectedConductor(null); setIsCreatingConductor(true); }}
+              className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
+            >
+              <Plus size={16} /> NOVO PERFIL
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
+            {conductors.map(conductor => (
+              <ConductorProfileCard
+                key={conductor.id}
+                conductor={conductor}
+                onEdit={() => { setSelectedConductor(conductor); setIsCreatingConductor(true); }}
+                onDelete={() => deleteConductor(conductor.id)}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
-      <Footer />
+      {/* TAB: CONFIRMAÇÕES */}
+      {adminSubTab === 'confirmations' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h3 className="text-lg font-bold text-slate-800 tracking-tight">Lista de Confirmados</h3>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Busca rápida..."
+                value={presenceSearch}
+                onChange={(e) => setPresenceSearch(e.target.value)}
+                className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
+              />
+            </div>
+          </div>
 
-      {/* FAB Mobile */}
-      {['events', 'admin'].includes(activeTab) && (
-        <button
-          onClick={() => { if (activeTab === 'admin') setIsCreatingEvent(true); else setActiveTab('events'); }}
-          className="fixed bottom-24 right-6 bg-indigo-600 text-white p-5 rounded-[1.5rem] shadow-2xl shadow-indigo-300 z-40 hover:scale-110 active:scale-90 transition-all md:hidden border-4 border-white"
-        >
-          {activeTab === 'admin' ? <Plus size={28} /> : <List size={28} />}
-        </button>
+          <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
+            <div className="overflow-x-auto no-scrollbar">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                    <th className="px-6 py-5">Músico</th>
+                    <th className="px-6 py-5">Instrumento</th>
+                    <th className="px-6 py-5">Evento</th>
+                    <th className="px-6 py-5">Congregação / Local</th>
+                    <th className="px-6 py-5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm divide-y divide-slate-50">
+                  {filteredPresences.length > 0 ? (
+                    filteredPresences.map((presence) => {
+                      const event = events.find(e => e.id === presence.eventId);
+                      const eventName = event ? getFriendlyEventName(event.type) : 'Evento';
+                      const eventStyles = event ? getTypeStyles(event.type) : { text: 'text-slate-500', bg: 'bg-slate-100' };
+
+                      return (
+                        <tr key={presence.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
+                                <User size={16} />
+                              </div>
+                              <div>
+                                <span className="font-bold block text-slate-800 tracking-tight leading-none truncate max-w-[120px]">{presence.name}</span>
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium mt-1 uppercase tracking-tighter italic">{presence.phone || 'Sem Telefone'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <Music size={14} className="text-slate-400" />
+                              <span className="font-semibold text-slate-700 text-xs truncate max-w-[80px]">{presence.instrument}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase w-fit ${eventStyles.bg} ${eventStyles.text}`}>
+                              {eventName}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={14} className="text-emerald-500" />
+                              <div>
+                                <span className="font-bold block text-slate-800 tracking-tight text-xs uppercase tracking-tighter leading-none">{event?.location || 'Não informado'}</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 block">{event?.day.split(' ')[0]} {event?.month}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                            <button onClick={() => deletePresence(presence.id)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-90">
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic font-medium">
+                        <ClipboardList size={32} className="mx-auto mb-2 opacity-20" />
+                        Nenhuma confirmação encontrada para os filtros aplicados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
+  )
+}
+
+{/* MODALS */ }
+{/* PRESENCE MODAL */ }
+{
+  isConfirming && selectedEvent && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${getTypeStyles(selectedEvent.type).card}`}>
+          <div className="relative z-10">
+            <h3 className="text-2xl font-black tracking-tight">Confirmar Presença</h3>
+            <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">{getFriendlyEventName(selectedEvent.type)} • {selectedEvent.location}</p>
+          </div>
+          <button onClick={() => setIsConfirming(false)} className="bg-white/20 p-3 rounded-2xl hover:bg-white/30 transition-all relative z-10 active:scale-90">
+            <X size={24} />
+          </button>
+        </div>
+        <form onSubmit={handleConfirmPresence} className="p-10 space-y-6">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
+              <User size={14} /> Nome Completo
+            </label>
+            <input
+              required
+              name="name"
+              defaultValue={userProfile?.name}
+              type="text"
+              placeholder="Seu nome completo"
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
+                <Music size={14} /> Instrumento
+              </label>
+              <select
+                name="instrument"
+                defaultValue={userProfile?.instrument}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+              >
+                {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
+                <Phone size={14} /> WhatsApp
+              </label>
+              <input
+                name="phone"
+                defaultValue={userProfile?.phone}
+                type="tel"
+                placeholder="(00) 00000-0000"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          <button type="submit" className={`w-full text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:scale-[1.02] ${getTypeStyles(selectedEvent.type).card}`}>
+            Confirmar agora <ChevronRight size={20} />
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* CREATE CONGREGATION MODAL */ }
+{
+  isCreatingCongregation && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        <div className="p-8 bg-indigo-600 text-white flex justify-between items-center flex-shrink-0">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">{selectedCongregation ? 'Editar Congregação' : 'Nova Congregação'}</h3>
+            <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Sedes e Locais de Culto</p>
+          </div>
+          <button onClick={() => setIsCreatingCongregation(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+            <X size={24} />
+          </button>
+        </div>
+        <form onSubmit={handleAddOrUpdateCongregation} className="p-8 overflow-y-auto space-y-8 no-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Landmark size={14} /> Nome da Congregação</label>
+              <input required name="name" defaultValue={selectedCongregation?.name} type="text" placeholder="Ex: Santa Terezinha" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
+              <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
+                {categories.length === 0 && (
+                  <>
+                    <option value="CENTRAL">CENTRAL</option>
+                    <option value="LOCAL">LOCAL</option>
+                    <option value="DISTRITO">DISTRITO</option>
+                  </>
+                )}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2">Localização</h4>
+            <div className="grid grid-cols-1 gap-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logradouro</label>
+                <input required name="address" defaultValue={selectedCongregation?.address} type="text" placeholder="Rua, Número, Bairro" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
+                  <input name="cep" defaultValue={selectedCongregation?.cep} type="text" placeholder="00000-000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cidade / Estado</label>
+                  <div className="flex gap-3">
+                    <input required name="city" defaultValue={selectedCongregation?.city} type="text" placeholder="Cidade" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+                    <input required name="state" defaultValue={selectedCongregation?.state || 'MG'} type="text" placeholder="UF" className="w-20 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
+              Dias de Culto
+              <button
+                type="button"
+                onClick={() => setTempServiceDays([...tempServiceDays, { day: '', time: '19:30' }])}
+                className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+              >
+                <Plus size={12} /> ADICIONAR DIA
+              </button>
+            </h4>
+            <div className="space-y-3">
+              {tempServiceDays.map((sd, idx) => (
+                <div key={idx} className="flex gap-4 items-center">
+                  <select
+                    value={sd.day}
+                    onChange={(e) => {
+                      const newDays = [...tempServiceDays];
+                      newDays[idx].day = e.target.value;
+                      setTempServiceDays(newDays);
+                    }}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                  >
+                    <option value="">Selecione o Dia...</option>
+                    {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <input
+                    value={sd.time}
+                    onChange={(e) => {
+                      const newDays = [...tempServiceDays];
+                      newDays[idx].time = e.target.value;
+                      setTempServiceDays(newDays);
+                    }}
+                    type="text"
+                    placeholder="19:30"
+                    className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setTempServiceDays(tempServiceDays.filter((_, i) => i !== idx))}
+                    className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              ))}
+              {tempServiceDays.length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum dia de culto adicionado.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
+              Ministério
+              <button
+                type="button"
+                onClick={() => setTempMinistry([...tempMinistry, { role: '', name: '' }])}
+                className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+              >
+                <Plus size={12} /> ADICIONAR MEMBRO
+              </button>
+            </h4>
+            <div className="space-y-3">
+              {tempMinistry.map((m, idx) => (
+                <div key={idx} className="space-y-2 p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100">
+                  <div className="flex gap-4 items-start">
+                    <div className="flex-1 space-y-2">
+                      <select
+                        value={m.role}
+                        onChange={(e) => {
+                          const newMin = [...tempMinistry];
+                          newMin[idx].role = e.target.value;
+                          setTempMinistry(newMin);
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                      >
+                        <option value="">Cargo...</option>
+                        {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                        {roles.length === 0 && (
+                          <>
+                            <option value="Ancião">Ancião</option>
+                            <option value="Diácono">Diácono</option>
+                            <option value="Cooperador">Cooperador</option>
+                          </>
+                        )}
+                      </select>
+
+                      <div className="relative">
+                        <input
+                          value={m.name}
+                          onChange={(e) => {
+                            const newMin = [...tempMinistry];
+                            newMin[idx].name = e.target.value;
+                            newMin[idx].profileId = undefined; // Reset if typing
+                            setTempMinistry(newMin);
+                          }}
+                          type="text"
+                          placeholder="Nome ou busque no sistema..."
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
+                        />
+                        {/* Lookup Results Box would go here, for now let's simplify with a datalist or similar if possible */}
+                        {m.name.length > 2 && !m.profileId && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto no-scrollbar">
+                            {allProfiles
+                              .filter(p => p.name.toLowerCase().includes(m.name.toLowerCase()))
+                              .map(p => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const newMin = [...tempMinistry];
+                                    newMin[idx].name = p.name;
+                                    newMin[idx].profileId = p.id;
+                                    setTempMinistry(newMin);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors"
+                                >
+                                  <span className="font-bold">{p.name}</span>
+                                  <span className="text-[10px] text-slate-400 ml-2 italic">({p.instrument})</span>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        {m.profileId && (
+                          <div className="absolute right-2 top-1.5 bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest flex items-center gap-1">
+                            <CheckCircle size={10} /> VINCULADO
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTempMinistry(tempMinistry.filter((_, i) => i !== idx))}
+                      className="p-2.5 text-red-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-slate-100 mt-0.5"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {tempMinistry.length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum membro do ministério adicionado.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-4 flex-shrink-0">
+            <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+              {selectedCongregation ? 'Atualizar Congregação' : 'Cadastrar Congregação'} <ChevronRight size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* CREATE EVENT MODAL */ }
+{
+  isCreatingEvent && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : 'Novo Evento 2026'}</h3>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{selectedEvent ? 'Atualização de Agendamento' : 'Configuração do Cronograma'}</p>
+          </div>
+          <button onClick={() => { setIsCreatingEvent(false); setSelectedEvent(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+            <X size={24} />
+          </button>
+        </div>
+        <form onSubmit={handleAddOrUpdateEvent} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <MapPin size={14} /> Localização / Distrito
+            </label>
+            <select required name="location" defaultValue={selectedEvent?.location} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+              <option value="">Selecione o Local...</option>
+              {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <List size={14} /> Tipo de Evento
+            </label>
+            <select
+              name="type"
+              value={creatingEventType}
+              onChange={(e) => setCreatingEventType(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+            >
+              <option value="">Selecione...</option>
+              {eventTypeList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </select>
+          </div>
+
+          <div className={`space-y-1.5 transition-opacity ${isConductorDisabled ? 'opacity-40' : 'opacity-100'}`}>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <User size={14} /> Encarregado
+            </label>
+            <input
+              required={!isConductorDisabled}
+              disabled={isConductorDisabled}
+              name="conductor"
+              defaultValue={selectedEvent?.conductor}
+              type="text"
+              placeholder={isConductorDisabled ? "N/A" : "Nome do encarregado"}
+              className={`w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium ${isConductorDisabled ? 'cursor-not-allowed' : ''}`}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Calendar size={14} /> Mês
+            </label>
+            <select name="month" defaultValue={selectedEvent?.month} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+              {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Número)</label>
+              <input required name="day" defaultValue={selectedEvent?.day.split(' ')[0]} type="number" min="1" max="31" placeholder="Ex: 15" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Semana)</label>
+              <select name="weekday" defaultValue={selectedEvent?.day.split('(')[1]?.replace(')', '')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Clock size={14} /> Horário
+            </label>
+            <input required name="time" defaultValue={selectedEvent?.time} type="text" placeholder="Ex: 17:00h" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+          </div>
+
+          <div className="md:col-span-2 pt-4">
+            <button type="submit" className="w-full bg-slate-800 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-slate-900">
+              {selectedEvent ? 'Salvar Alterações' : 'Salvar Novo Evento'} <ChevronRight size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{
+  isCreatingConductor && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">{selectedConductor ? 'Editar Perfil' : 'Novo Encarregado'}</h3>
+            <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Perfis de Música</p>
+          </div>
+          <button onClick={() => { setIsCreatingConductor(false); setSelectedConductor(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+            <X size={24} />
+          </button>
+        </div>
+        <form onSubmit={handleAddOrUpdateConductor} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <User size={14} /> Nome do Encarregado
+            </label>
+            <input required name="name" defaultValue={selectedConductor?.name} type="text" placeholder="Nome Completo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Calendar size={14} /> Idade
+            </label>
+            <input required name="age" defaultValue={selectedConductor?.age} type="number" placeholder="Anos" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Music size={14} /> Instrumento
+            </label>
+            <select name="instrument" defaultValue={selectedConductor?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+              {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <MapPin size={14} /> Congregação Comum
+            </label>
+            <select name="congregation" defaultValue={selectedConductor?.congregation} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+              <option value="">Selecione...</option>
+              {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <List size={14} /> Tipo
+            </label>
+            <select name="type" defaultValue={selectedConductor?.type || ConductorType.LOCAL} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
+              <option value={ConductorType.LOCAL}>Local</option>
+              <option value={ConductorType.REGIONAL}>Regional</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Camera size={14} /> URL da Foto (Opcional)
+            </label>
+            <input name="photoUrl" defaultValue={selectedConductor?.photoUrl} type="url" placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
+          </div>
+
+          <div className="md:col-span-2 pt-4">
+            <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+              {selectedConductor ? 'Salvar Alterações' : 'Cadastrar Perfil'} <ChevronRight size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* DELETE MEMBER CONFIRMATION MODAL */ }
+{
+  isDeletingMember && memberToDelete && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+        <div className="p-8 bg-red-600 text-white text-center">
+          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trash2 size={32} />
+          </div>
+          <h3 className="text-xl font-bold tracking-tight">Excluir Membro</h3>
+          <p className="text-white/80 text-sm mt-1">Deseja realmente remover este usuário do sistema?</p>
+        </div>
+        <div className="p-8 space-y-4">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
+            <div className="bg-white p-2 rounded-xl text-slate-400">
+              <User size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{memberToDelete.email}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={() => handleDeleteMember(memberToDelete)}
+              className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              EXCLUIR AGORA
+            </button>
+            <button
+              onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
+              className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
+            >
+              CANCELAR
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+{/* EDIT MEMBER MODAL */ }
+{
+  isMemberModalOpen && memberToEdit && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
+        <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
+          <div>
+            <h3 className="text-xl font-bold tracking-tight">Editar Membro</h3>
+            <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Gestão Administrativa de Perfil</p>
+          </div>
+          <button onClick={() => { setIsMemberModalOpen(false); setMemberToEdit(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+            <X size={24} />
+          </button>
+        </div>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            const congId = fd.get('congregationId') as string;
+            const updates = {
+              name: fd.get('name') as string,
+              phone: fd.get('phone') as string,
+              instrument: fd.get('instrument') as string,
+              role: fd.get('role') as any,
+              congregation_id: congId || null,
+            };
+            await updateUserProfile(memberToEdit.id, updates as any);
+            setIsMemberModalOpen(false);
+            setMemberToEdit(null);
+          }}
+          className="p-8 space-y-5"
+        >
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <User size={14} /> Nome Completo
+            </label>
+            <input
+              name="name"
+              required
+              defaultValue={memberToEdit.name}
+              type="text"
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                <Briefcase size={14} /> Nível de Acesso
+              </label>
+              <select
+                name="role"
+                defaultValue={memberToEdit.role}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+              >
+                <option value="USER">COMUM</option>
+                <option value="MUSICIAN">MÚSICO</option>
+                <option value="ADMIN">ADMINISTRADOR</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+                <Music size={14} /> Instrumento
+              </label>
+              <select
+                name="instrument"
+                defaultValue={memberToEdit.instrument}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+              >
+                {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Phone size={14} /> WhatsApp
+            </label>
+            <input
+              name="phone"
+              defaultValue={memberToEdit.phone}
+              type="tel"
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
+              <Landmark size={14} /> Congregação Comum
+            </label>
+            <select
+              name="congregationId"
+              defaultValue={memberToEdit.congregation_id || ''}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+            >
+              <option value="">Selecione...</option>
+              {congregations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          <div className="pt-4">
+            <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
+              SALVAR ALTERAÇÕES <ChevronRight size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{/* DELETE CONFIRMATION MODAL */ }
+{
+  isDeletingMember && memberToDelete && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-8 bg-red-600 text-white text-center">
+          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trash2 size={32} />
+          </div>
+          <h3 className="text-xl font-bold tracking-tight">Confirmar Exclusão</h3>
+          <p className="text-white/80 text-sm mt-2">Deseja realmente excluir este membro? Esta ação não pode ser desfeita.</p>
+        </div>
+        <div className="p-8 space-y-3">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Membro</p>
+            <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
+            <p className="text-xs text-slate-500">{memberToDelete.email}</p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={() => handleDeleteMember(memberToDelete)}
+              className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              EXCLUIR AGORA
+            </button>
+            <button
+              onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
+              className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
+            >
+              CANCELAR
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+        </main >
+      )}
+
+{
+  isCropping && imageToCrop && (
+    <ImageCropperModal
+      image={imageToCrop}
+      onCropComplete={onCropComplete}
+      onCancel={() => {
+        setIsCropping(false);
+        setImageToCrop(null);
+      }}
+    />
+  )
+}
+
+<Footer />
+
+{/* FAB Mobile */ }
+{
+  ['events', 'admin'].includes(activeTab) && (
+    <button
+      onClick={() => { if (activeTab === 'admin') setIsCreatingEvent(true); else setActiveTab('events'); }}
+      className="fixed bottom-24 right-6 bg-indigo-600 text-white p-5 rounded-[1.5rem] shadow-2xl shadow-indigo-300 z-40 hover:scale-110 active:scale-90 transition-all md:hidden border-4 border-white"
+    >
+      {activeTab === 'admin' ? <Plus size={28} /> : <List size={28} />}
+    </button>
+  )
+}
+    </div >
   );
 }
