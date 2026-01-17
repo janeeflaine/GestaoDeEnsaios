@@ -297,7 +297,7 @@ const Footer: React.FC = () => (
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
         <Info size={12} className="text-slate-300" /> Site Extraoficial
       </p>
-      <p className="text-[9px] text-slate-300 font-medium">Desenvolvido para fins de organização interna. © 2026</p>
+      <p className="text-[9px] text-slate-300 font-medium">Desenvolvido para fins de organização interna. © {new Date().getFullYear()}</p>
     </div>
   </footer>
 );
@@ -1048,7 +1048,7 @@ export default function App() {
                   <div className="inline-flex items-center justify-center p-4 bg-white/10 backdrop-blur-md rounded-2xl text-white mb-2">
                     <Music size={32} strokeWidth={2.5} />
                   </div>
-                  <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">Calendário de Ensaios 2026</h1>
+                  <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">Calendário de Eventos CCB - {new Date().getFullYear()}</h1>
                   <p className="text-indigo-100 font-medium text-sm md:text-base max-w-md mx-auto">
                     Confirme sua presença e adicione os ensaio ao seu Google Agenda com apenas um clique.
                   </p>
@@ -1176,7 +1176,7 @@ export default function App() {
             <div className="px-4 mt-8 space-y-6 animate-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
               <header className="space-y-4">
                 <div>
-                  <h1 className="text-3xl font-black text-slate-800 tracking-tight">Cronograma 2026</h1>
+                  <h1 className="text-3xl font-black text-slate-800 tracking-tight">Cronograma {new Date().getFullYear()}</h1>
                   <p className="text-slate-500 font-medium">Explore e filtre todos os eventos planejados para o ano.</p>
                 </div>
 
@@ -2477,7 +2477,7 @@ export default function App() {
                 <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                   <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
                     <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : 'Novo Evento 2026'}</h3>
+                      <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : `Novo Evento ${new Date().getFullYear()}`}</h3>
                       <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{selectedEvent ? 'Atualização de Agendamento' : 'Configuração do Cronograma'}</p>
                     </div>
                     <button onClick={() => { setIsCreatingEvent(false); setSelectedEvent(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
