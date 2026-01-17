@@ -548,19 +548,25 @@ export default function App() {
     };
   }, [events, today, presences]);
 
-  const uniqueConductors = useMemo(() => ['Todos', ...new Array(...new Set(events.map(e => e.conductor)))].sort(), [events]);
-  const uniqueLocations = useMemo(() => ['Todos', ...new Array(...new Set(events.map(e => e.location)))].sort(), [events]);
-  const eventTypes = useMemo(() => ['Todos', ...Object.values(EventType)], []);
+  const uniqueConductors = useMemo(() => ['Todos', ...new Set(conductors.map(c => c.name))].sort(), [conductors]);
+  const uniqueLocations = useMemo(() => ['Todos', ...new Set(congregations.map(c => c.name))].sort(), [congregations]);
+  const eventTypes = useMemo(() => ['Todos', ...eventTypeList.map(t => t.name)], [eventTypeList]);
 
   const filteredEvents = useMemo(() => {
     let list = events;
     if (monthFilter !== 'Todos') list = list.filter(e => e.month === monthFilter);
     if (conductorFilter !== 'Todos') list = list.filter(e => e.conductor === conductorFilter);
     if (locationFilter !== 'Todos') list = list.filter(e => e.location === locationFilter);
-    if (typeFilter !== 'Todos') list = list.filter(e => e.type === typeFilter);
+    if (typeFilter !== 'Todos') {
+      const typeDef = eventTypeList.find(t => t.name === typeFilter);
+      list = list.filter(e => {
+        if (!typeDef) return e.type === typeFilter;
+        return e.type === typeDef.name || e.type === typeDef.value;
+      });
+    }
 
     return list.sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
-  }, [events, monthFilter, conductorFilter, locationFilter, typeFilter]);
+  }, [events, monthFilter, conductorFilter, locationFilter, typeFilter, eventTypeList]);
 
   const filteredPresences = useMemo(() => {
     let list = presences;
@@ -2504,19 +2510,20 @@ export default function App() {
                       </select>
                     </div>
 
-                    <div className={`space-y-1.5 transition-opacity ${isConductorDisabled ? 'opacity-40' : 'opacity-100'}`}>
+                    <div className="space-y-1.5 transition-opacity opacity-100">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
                         <User size={14} /> Encarregado
                       </label>
-                      <input
-                        required={!isConductorDisabled}
-                        disabled={isConductorDisabled}
+                      <select
                         name="conductor"
-                        defaultValue={selectedEvent?.conductor}
-                        type="text"
-                        placeholder={isConductorDisabled ? "N/A" : "Nome do encarregado"}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium ${isConductorDisabled ? 'cursor-not-allowed' : ''}`}
-                      />
+                        defaultValue={selectedEvent?.conductor || 'Coletivo'}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                      >
+                        <option value="Coletivo">Coletivo (Geral)</option>
+                        {uniqueConductors.filter(c => c !== 'Todos').map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="space-y-1.5">
