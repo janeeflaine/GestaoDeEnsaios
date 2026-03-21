@@ -68,7 +68,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         return { totals, pct, totalMusicos, totalOrganistas, totalGeral, totalEventos: statistics.length };
     }, [statistics]);
 
-    const chartColors = ['#EAB308', '#3B82F6', '#22C55E', '#94A3B8'];
+    const chartColors = ['#facc15', '#60a5fa', '#34d399', '#94a3b8']; // yellow-400, blue-400, green-400, slate-400
     const chartLabels = ['Cordas', 'Madeiras', 'Metais', 'Acordeon'];
 
     const quantityChartData = {
@@ -175,28 +175,28 @@ export default function StatisticsDashboard({ congregations, events, userProfile
 
             {/* Category Table */}
             {aggregated && (
-                <div className="glass-card overflow-hidden">
-                    <table className="w-full text-sm">
+                <div className="glass-card overflow-x-auto">
+                    <table className="w-full text-sm min-w-[500px]">
                         <thead>
-                            <tr className="bg-white/5">
-                                <th className="p-3 text-left text-slate-400 font-bold uppercase text-xs">Categoria</th>
-                                <th className="p-3 text-center text-slate-400 font-bold uppercase text-xs">Total</th>
-                                <th className="p-3 text-center text-slate-400 font-bold uppercase text-xs">% Real</th>
-                                <th className="p-3 text-center text-slate-400 font-bold uppercase text-xs">% Ideal</th>
+                            <tr className="bg-white/5 border-b border-white/10">
+                                <th className="p-4 text-left text-slate-400 font-bold uppercase text-xs tracking-wider">Categoria</th>
+                                <th className="p-4 text-center text-slate-400 font-bold uppercase text-xs tracking-wider">Total</th>
+                                <th className="p-4 text-center text-slate-400 font-bold uppercase text-xs tracking-wider">% Real</th>
+                                <th className="p-4 text-center text-slate-400 font-bold uppercase text-xs tracking-wider">% Ideal</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-white/5">
                             {[
-                                { label: 'Cordas', total: aggregated.totals.cordas, pct: aggregated.pct.cordas, ideal: '50%', bg: 'bg-yellow-900/20', text: 'text-yellow-400' },
-                                { label: 'Madeiras', total: aggregated.totals.madeiras, pct: aggregated.pct.madeiras, ideal: '25%', bg: 'bg-blue-900/20', text: 'text-blue-400' },
-                                { label: 'Metais', total: aggregated.totals.metais, pct: aggregated.pct.metais, ideal: '25%', bg: 'bg-green-900/20', text: 'text-green-400' },
-                                { label: 'Acordeon', total: aggregated.totals.acordeon, pct: aggregated.pct.acordeon, ideal: '-', bg: 'bg-slate-800/20', text: 'text-slate-400' },
+                                { label: 'Cordas', total: aggregated.totals.cordas, pct: aggregated.pct.cordas, ideal: '50%', border: 'border-l-4 border-l-yellow-400', text: 'text-yellow-400' },
+                                { label: 'Madeiras', total: aggregated.totals.madeiras, pct: aggregated.pct.madeiras, ideal: '25%', border: 'border-l-4 border-l-blue-400', text: 'text-blue-400' },
+                                { label: 'Metais', total: aggregated.totals.metais, pct: aggregated.pct.metais, ideal: '25%', border: 'border-l-4 border-l-green-400', text: 'text-green-400' },
+                                { label: 'Acordeon', total: aggregated.totals.acordeon, pct: aggregated.pct.acordeon, ideal: '-', border: 'border-l-4 border-l-slate-400', text: 'text-slate-400' },
                             ].map(row => (
-                                <tr key={row.label} className={`${row.bg} border-t border-white/5`}>
-                                    <td className={`p-3 font-bold ${row.text}`}>{row.label}</td>
-                                    <td className="p-3 text-center text-white font-semibold">{row.total}</td>
-                                    <td className={`p-3 text-center font-bold ${row.text}`}>{row.pct}%</td>
-                                    <td className="p-3 text-center text-slate-400 font-semibold">{row.ideal}</td>
+                                <tr key={row.label} className={`bg-white/[0.02] hover:bg-white/[0.04] transition-colors`}>
+                                    <td className={`p-4 font-bold ${row.text} ${row.border}`}>{row.label}</td>
+                                    <td className="p-4 text-center text-white font-semibold">{row.total}</td>
+                                    <td className={`p-4 text-center font-bold ${row.text}`}>{row.pct}%</td>
+                                    <td className="p-4 text-center text-slate-400 font-semibold">{row.ideal}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -219,22 +219,22 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                         const mt = calcMinistryTotals(stat);
                         const congregation = congregations.find(c => c.id === stat.congregation_id);
                         return (
-                            <div key={stat.id} className="glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                <div className="flex-1">
-                                    <p className="text-white font-bold">{congregation?.name || 'Congregação'}</p>
-                                    <p className="text-xs text-slate-400">
+                            <div key={stat.id} className="glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="flex-1 min-w-0 w-full sm:w-auto">
+                                    <p className="text-white font-bold truncate" title={congregation?.name}>{congregation?.name || 'Congregação'}</p>
+                                    <p className="text-xs text-slate-400 truncate">
                                         {new Date(stat.event_date + 'T00:00:00').toLocaleDateString('pt-BR')} •
-                                        {' '}{ft.total} instrumentos • Total Geral: {mt.totalGeral}
+                                        {' '}{ft.total} inst. • Total: {mt.totalGeral}
                                     </p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleExportPDF(stat)} className="bg-indigo-600/20 text-indigo-400 p-2 rounded-xl hover:bg-indigo-600/30 transition-all" title="Exportar PDF">
+                                <div className="flex gap-2 flex-shrink-0">
+                                    <button onClick={() => handleExportPDF(stat)} className="bg-indigo-600/20 text-indigo-400 p-2.5 rounded-xl hover:bg-indigo-600/30 transition-all" title="Exportar PDF">
                                         <FileText size={18} />
                                     </button>
-                                    <button onClick={() => { setEditingStat(stat); setShowForm(true); }} className="bg-white/5 text-slate-400 p-2 rounded-xl hover:bg-white/10 transition-all" title="Editar">
+                                    <button onClick={() => { setEditingStat(stat); setShowForm(true); }} className="bg-white/5 text-slate-400 p-2.5 rounded-xl hover:bg-white/10 transition-all" title="Editar">
                                         <BarChart3 size={18} />
                                     </button>
-                                    <button onClick={() => stat.id && handleDelete(stat.id)} className="bg-red-600/20 text-red-400 p-2 rounded-xl hover:bg-red-600/30 transition-all" title="Excluir">
+                                    <button onClick={() => stat.id && handleDelete(stat.id)} className="bg-red-600/20 text-red-400 p-2.5 rounded-xl hover:bg-red-600/30 transition-all" title="Excluir">
                                         <Trash2 size={18} />
                                     </button>
                                 </div>

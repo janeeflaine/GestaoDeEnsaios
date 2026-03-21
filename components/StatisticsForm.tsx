@@ -15,10 +15,10 @@ interface StatisticsFormProps {
 }
 
 const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string }> = {
-    cordas: { bg: 'bg-yellow-900/30', border: 'border-yellow-500/40', label: 'Cordas' },
-    madeiras: { bg: 'bg-blue-900/30', border: 'border-blue-500/40', label: 'Madeiras' },
-    metais: { bg: 'bg-green-900/30', border: 'border-green-500/40', label: 'Metais' },
-    acordeon: { bg: 'bg-slate-800/30', border: 'border-slate-500/40', label: 'Acordeon' },
+    cordas: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-yellow-500', label: 'Cordas' },
+    madeiras: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-blue-500', label: 'Madeiras' },
+    metais: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-green-500', label: 'Metais' },
+    acordeon: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-slate-400', label: 'Acordeon' },
 };
 
 export default function StatisticsForm({
@@ -92,10 +92,10 @@ export default function StatisticsForm({
         return (
             <div key={familyKey} className={`${colors.bg} ${colors.border} border rounded-2xl p-5 space-y-3`}>
                 <h4 className="text-sm font-bold text-slate-200 uppercase tracking-wider">{colors.label}</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {family.map(inst => (
-                        <div key={inst.key} className="space-y-1">
-                            <label className="text-xs text-slate-400 font-medium">{inst.label}</label>
+                        <div key={inst.key} className="space-y-1 min-w-0">
+                            <label className="text-[11px] text-slate-400 font-bold truncate block" title={inst.label}>{inst.label}</label>
                             <input
                                 type="number" min="0"
                                 value={(stat as any)[inst.key] || 0}
@@ -110,8 +110,8 @@ export default function StatisticsForm({
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[60] flex items-start justify-center overflow-y-auto p-4">
-            <div className="glass-card bg-slate-800/90 w-full max-w-4xl my-8 overflow-hidden">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-start justify-center overflow-y-auto p-2 sm:p-4">
+            <div className="glass-card bg-slate-900/95 w-full max-w-4xl my-4 sm:my-8 overflow-hidden shadow-2xl ring-1 ring-white/10">
                 {/* Header */}
                 <div className="p-6 bg-gradient-to-r from-indigo-600 to-purple-600 flex justify-between items-center">
                     <div>
@@ -123,7 +123,7 @@ export default function StatisticsForm({
                     </button>
                 </div>
 
-                <div className="p-6 space-y-8 max-h-[75vh] overflow-y-auto">
+                <div className="p-4 sm:p-6 space-y-8 max-h-[85vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden">
                     {/* SECTION 1: General Data */}
                     <section className="space-y-4">
                         <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
@@ -227,10 +227,10 @@ export default function StatisticsForm({
                         <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
                             <Users size={16} /> Ministério e Administração
                         </h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                             {MINISTRY_FIELDS.map(field => (
-                                <div key={field.key} className="space-y-1">
-                                    <label className="text-xs text-slate-400 font-medium">{field.label}</label>
+                                <div key={field.key} className="space-y-1 min-w-0">
+                                    <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
                                     <input
                                         type="number" min="0"
                                         value={(stat as any)[field.key] || 0}
