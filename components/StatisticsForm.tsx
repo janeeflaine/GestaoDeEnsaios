@@ -91,7 +91,12 @@ export default function StatisticsForm({
         const colors = FAMILY_COLORS[familyKey];
         return (
             <div key={familyKey} className={`${colors.bg} ${colors.border} border rounded-2xl p-5 space-y-3`}>
-                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">{colors.label}</h4>
+                <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">{colors.label}</h4>
+                    <span className="text-xs font-black text-slate-500 bg-white px-2.5 py-1 rounded-md shadow-sm border border-slate-200">
+                        Total: {familyTotals[familyKey as keyof typeof familyTotals]}
+                    </span>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {family.map(inst => (
                         <div key={inst.key} className="space-y-1 min-w-0">
