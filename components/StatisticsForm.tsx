@@ -15,10 +15,10 @@ interface StatisticsFormProps {
 }
 
 const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string }> = {
-    cordas: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-yellow-500', label: 'Cordas' },
-    madeiras: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-blue-500', label: 'Madeiras' },
-    metais: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-green-500', label: 'Metais' },
-    acordeon: { bg: 'bg-white/[0.02]', border: 'border-white/5 border-l-4 border-l-slate-400', label: 'Acordeon' },
+    cordas: { bg: 'bg-slate-50', border: 'border-slate-200 border-l-4 border-l-yellow-500', label: 'Cordas' },
+    madeiras: { bg: 'bg-slate-50', border: 'border-slate-200 border-l-4 border-l-blue-500', label: 'Madeiras' },
+    metais: { bg: 'bg-slate-50', border: 'border-slate-200 border-l-4 border-l-green-500', label: 'Metais' },
+    acordeon: { bg: 'bg-slate-50', border: 'border-slate-200 border-l-4 border-l-slate-500', label: 'Acordeon' },
 };
 
 export default function StatisticsForm({
@@ -82,20 +82,20 @@ export default function StatisticsForm({
         if (!error) { setShowEncModal(false); onSaved(); }
     };
 
-    const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center font-semibold text-lg";
-    const selectClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-medium";
-    const labelClass = "text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5";
+    const inputClass = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-lg text-center shadow-sm";
+    const selectClass = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium shadow-sm";
+    const labelClass = "text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 ml-1";
 
     const renderInstrumentGroup = (familyKey: string) => {
         const family = STAT_INSTRUMENTS[familyKey as keyof typeof STAT_INSTRUMENTS];
         const colors = FAMILY_COLORS[familyKey];
         return (
             <div key={familyKey} className={`${colors.bg} ${colors.border} border rounded-2xl p-5 space-y-3`}>
-                <h4 className="text-sm font-bold text-slate-200 uppercase tracking-wider">{colors.label}</h4>
+                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">{colors.label}</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {family.map(inst => (
                         <div key={inst.key} className="space-y-1 min-w-0">
-                            <label className="text-[11px] text-slate-400 font-bold truncate block" title={inst.label}>{inst.label}</label>
+                            <label className="text-[11px] text-slate-500 font-bold truncate block" title={inst.label}>{inst.label}</label>
                             <input
                                 type="number" min="0"
                                 value={(stat as any)[inst.key] || 0}
@@ -110,23 +110,23 @@ export default function StatisticsForm({
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-start justify-center overflow-y-auto p-2 sm:p-4">
-            <div className="glass-card bg-slate-900/95 w-full max-w-4xl my-4 sm:my-8 overflow-hidden shadow-2xl ring-1 ring-white/10">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-start justify-center overflow-y-auto p-4">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 w-full max-w-4xl my-4 sm:my-8 overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="p-6 bg-gradient-to-r from-indigo-600 to-purple-600 flex justify-between items-center">
+                <div className="p-6 bg-indigo-600 flex justify-between items-center sm:p-8">
                     <div>
                         <h3 className="text-xl font-bold text-white tracking-tight">Cadastrar Dados do Evento</h3>
-                        <p className="text-white/60 text-xs font-bold uppercase tracking-widest">Estatísticas Musicais</p>
+                        <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Estatísticas Musicais</p>
                     </div>
-                    <button onClick={onClose} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
+                    <button onClick={onClose} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all text-white">
                         <X size={24} className="text-white" />
                     </button>
                 </div>
 
-                <div className="p-4 sm:p-6 space-y-8 max-h-[85vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden">
+                <div className="p-4 sm:p-8 space-y-8 max-h-[85vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden relative">
                     {/* SECTION 1: General Data */}
                     <section className="space-y-4">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
                             <BookOpen size={16} /> Dados Gerais
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -176,7 +176,7 @@ export default function StatisticsForm({
                                     return (
                                         <button key={enc.id} type="button"
                                             onClick={() => setSelectedEncRegionais(prev => selected ? prev.filter(id => id !== enc.id) : [...prev, enc.id])}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${selected ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shadow-sm ${selected ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                         >
                                             {enc.name} {enc.city ? `(${enc.city}/${enc.state})` : ''}
                                         </button>
@@ -188,7 +188,7 @@ export default function StatisticsForm({
 
                     {/* SECTION 2: Orchestral Formation */}
                     <section className="space-y-4">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
                             <Music size={16} /> Formação Orquestral
                         </h3>
                         <div className="space-y-4">
@@ -196,35 +196,35 @@ export default function StatisticsForm({
                         </div>
 
                         {/* Live Calculation Summary */}
-                        <div className="glass-card p-5 space-y-3">
-                            <h4 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Resumo por Família</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 shadow-inner">
+                            <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] text-center">Resumo por Família</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {([
-                                    { label: 'Cordas', value: familyTotals.cordas, pct: familyPct.cordas, ideal: 50, color: 'text-yellow-400' },
-                                    { label: 'Madeiras', value: familyTotals.madeiras, pct: familyPct.madeiras, ideal: 25, color: 'text-blue-400' },
-                                    { label: 'Metais', value: familyTotals.metais, pct: familyPct.metais, ideal: 25, color: 'text-green-400' },
-                                    { label: 'Acordeon', value: familyTotals.acordeon, pct: familyPct.acordeon, ideal: null, color: 'text-slate-400' },
+                                    { label: 'Cordas', value: familyTotals.cordas, pct: familyPct.cordas, ideal: 50, color: 'text-yellow-600' },
+                                    { label: 'Madeiras', value: familyTotals.madeiras, pct: familyPct.madeiras, ideal: 25, color: 'text-blue-600' },
+                                    { label: 'Metais', value: familyTotals.metais, pct: familyPct.metais, ideal: 25, color: 'text-green-600' },
+                                    { label: 'Acordeon', value: familyTotals.acordeon, pct: familyPct.acordeon, ideal: null, color: 'text-slate-600' },
                                 ] as const).map(fam => (
-                                    <div key={fam.label} className="bg-white/5 rounded-xl p-3 text-center">
-                                        <p className={`text-2xl font-black ${fam.color}`}>{fam.value}</p>
-                                        <p className="text-xs text-slate-400 font-bold">{fam.label}</p>
-                                        <p className="text-xs mt-1">
+                                    <div key={fam.label} className="bg-white rounded-2xl p-4 text-center shadow-sm border border-slate-100">
+                                        <p className={`text-3xl font-black ${fam.color}`}>{fam.value}</p>
+                                        <p className="text-xs font-bold text-slate-800 mt-1">{fam.label}</p>
+                                        <p className="text-[10px] mt-1 font-semibold">
                                             <span className={fam.color}>{fam.pct}%</span>
-                                            {fam.ideal !== null && <span className="text-slate-600"> / {fam.ideal}% ideal</span>}
+                                            {fam.ideal !== null && <span className="text-slate-400"> / {fam.ideal}% ideal</span>}
                                         </p>
                                     </div>
                                 ))}
                             </div>
-                            <div className="text-center pt-2 border-t border-white/10">
-                                <p className="text-3xl font-black text-white">{familyTotals.total}</p>
-                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Total de Instrumentos</p>
+                            <div className="text-center pt-4 border-t border-slate-200">
+                                <p className="text-4xl font-black text-slate-900">{familyTotals.total}</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Total de Instrumentos</p>
                             </div>
                         </div>
                     </section>
 
                     {/* SECTION 3: Ministry */}
                     <section className="space-y-4">
-                        <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
                             <Users size={16} /> Ministério e Administração
                         </h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -240,14 +240,14 @@ export default function StatisticsForm({
                                 </div>
                             ))}
                         </div>
-                        <div className="glass-card p-4 grid grid-cols-2 gap-4 text-center">
-                            <div>
-                                <p className="text-2xl font-black text-indigo-400">{ministryTotals.musicosOrganistas}</p>
-                                <p className="text-xs text-slate-400 font-bold">Músicos + Organistas</p>
+                        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 grid grid-cols-2 gap-4 text-center shadow-inner">
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                                <p className="text-3xl font-black text-indigo-600">{ministryTotals.musicosOrganistas}</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Músicos + Organistas</p>
                             </div>
-                            <div>
-                                <p className="text-3xl font-black text-white">{ministryTotals.totalGeral}</p>
-                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Total Geral</p>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                                <p className="text-4xl font-black text-slate-900">{ministryTotals.totalGeral}</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Total Geral</p>
                             </div>
                         </div>
                     </section>
@@ -256,7 +256,7 @@ export default function StatisticsForm({
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black py-5 rounded-2xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:opacity-90 disabled:opacity-50"
+                        className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl shadow-indigo-200 flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700 disabled:opacity-50"
                     >
                         {saving ? 'Salvando...' : (editingStat ? 'Salvar Alterações' : 'Salvar Estatística')} <ChevronRight size={20} />
                     </button>
@@ -265,14 +265,14 @@ export default function StatisticsForm({
 
             {/* Quick Add Ancião Modal */}
             {showAnciaoModal && (
-                <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
-                    <div className="glass-card bg-slate-800 w-full max-w-sm p-6">
-                        <h4 className="text-lg font-bold text-white mb-4">Cadastrar Ancião</h4>
-                        <form onSubmit={handleAddAnciao} className="space-y-4">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-slate-100">
+                        <h4 className="text-xl font-bold text-slate-800 mb-6 tracking-tight">Cadastrar Ancião</h4>
+                        <form onSubmit={handleAddAnciao} className="space-y-5">
                             <input name="name" required placeholder="Nome do Ancião" className={inputClass + ' text-left'} />
-                            <div className="flex gap-2">
-                                <button type="button" onClick={() => setShowAnciaoModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-400 font-bold">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold">Salvar</button>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setShowAnciaoModal(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
+                                <button type="submit" className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
                             </div>
                         </form>
                     </div>
@@ -281,18 +281,18 @@ export default function StatisticsForm({
 
             {/* Quick Add Enc. Regional Modal */}
             {showEncModal && (
-                <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
-                    <div className="glass-card bg-slate-800 w-full max-w-sm p-6">
-                        <h4 className="text-lg font-bold text-white mb-4">Cadastrar Enc. Regional</h4>
-                        <form onSubmit={handleAddEnc} className="space-y-4">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-slate-100">
+                        <h4 className="text-xl font-bold text-slate-800 mb-6 tracking-tight">Cadastrar Enc. Regional</h4>
+                        <form onSubmit={handleAddEnc} className="space-y-5">
                             <input name="name" required placeholder="Nome" className={inputClass + ' text-left'} />
                             <div className="grid grid-cols-2 gap-3">
                                 <input name="city" placeholder="Cidade" className={inputClass + ' text-left'} />
                                 <input name="state" placeholder="UF" maxLength={2} className={inputClass + ' text-left'} />
                             </div>
-                            <div className="flex gap-2">
-                                <button type="button" onClick={() => setShowEncModal(false)} className="flex-1 py-3 rounded-xl bg-white/5 text-slate-400 font-bold">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold">Salvar</button>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setShowEncModal(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
+                                <button type="submit" className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
                             </div>
                         </form>
                     </div>
