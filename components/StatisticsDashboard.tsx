@@ -158,13 +158,17 @@ export default function StatisticsDashboard({ congregations, events, userProfile
             {/* Charts */}
             {aggregated && aggregated.totals.total > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="glass-card p-6">
-                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4 text-center">Quantidade Total por Família</h3>
-                        <div className="h-64"><Doughnut data={quantityChartData} options={chartOptions} /></div>
+                    <div className="glass-card p-6 flex flex-col items-center">
+                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-6 text-center">Quantidade Total por Família</h3>
+                        <div className="w-full h-72 flex items-center justify-center pt-2">
+                            <Doughnut data={quantityChartData} options={chartOptions} />
+                        </div>
                     </div>
-                    <div className="glass-card p-6">
-                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4 text-center">Porcentagem Real (%)</h3>
-                        <div className="h-64"><Doughnut data={percentageChartData} options={chartOptions} /></div>
+                    <div className="glass-card p-6 flex flex-col items-center">
+                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-6 text-center">Porcentagem Real (%)</h3>
+                        <div className="w-full h-72 flex items-center justify-center pt-2">
+                            <Doughnut data={percentageChartData} options={chartOptions} />
+                        </div>
                     </div>
                 </div>
             )}
