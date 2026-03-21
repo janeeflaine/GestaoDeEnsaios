@@ -15,6 +15,7 @@ import EventSummaryCard from './components/EventSummaryCard';
 import ConductorProfileCard from './components/ConductorProfileCard';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import StatisticsDashboard from './components/StatisticsDashboard';
 // --- Main App ---
 
 export default function App() {
@@ -2544,6 +2545,15 @@ export default function App() {
               </div>
             )
           }
+
+          {/* STATISTICS TAB (Admin Only) */}
+          {activeTab === 'statistics' && userProfile?.role === 'ADMIN' && (
+            <StatisticsDashboard
+              congregations={congregations}
+              events={events}
+              userProfileId={userProfile?.id}
+            />
+          )}
 
         </main >
       )}

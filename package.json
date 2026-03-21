@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "chart.js": "^4.5.1",
     "dotenv": "^17.2.3",
     "lucide-react": "^0.562.0",
+    "pdfmake": "^0.3.7",
     "react": "^19.2.3",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.3",
     "react-easy-crop": "^5.5.6"
   },
