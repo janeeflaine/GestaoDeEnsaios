@@ -147,14 +147,16 @@ export default function StatisticsForm({
                                 <input type="date" value={stat.event_date} onChange={e => setStat(p => ({ ...p, event_date: e.target.value }))} className={inputClass + ' text-left'} />
                             </div>
                             <div className="space-y-1.5">
-                                <label className={labelClass}>
-                                    Presidência (Ancião)
-                                    <button type="button" onClick={() => setShowAnciaoModal(true)} className="ml-auto text-indigo-400 hover:text-indigo-300"><Plus size={14} /></button>
-                                </label>
-                                <select value={stat.anciao_id || ''} onChange={e => setStat(p => ({ ...p, anciao_id: parseInt(e.target.value) || undefined }))} className={selectClass}>
-                                    <option value="">Selecione...</option>
-                                    {anciaes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
+                                <label className={labelClass}>Presidência (Ancião)</label>
+                                <div className="flex gap-2">
+                                    <select value={stat.anciao_id || ''} onChange={e => setStat(p => ({ ...p, anciao_id: parseInt(e.target.value) || undefined }))} className={selectClass + " flex-1"}>
+                                        <option value="">Selecione um Ancião...</option>
+                                        {anciaes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                    <button type="button" onClick={() => setShowAnciaoModal(true)} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="Cadastrar Novo Ancião">
+                                        <Plus size={16} /> Novo
+                                    </button>
+                                </div>
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelClass}>Palavra</label>
@@ -170,24 +172,47 @@ export default function StatisticsForm({
                             </div>
                         </div>
                         {/* Enc. Regionais multi-select */}
-                        <div className="space-y-1.5">
-                            <label className={labelClass}>
-                                Encarregado(s) Regional(is)
-                                <button type="button" onClick={() => setShowEncModal(true)} className="ml-auto text-indigo-400 hover:text-indigo-300"><Plus size={14} /></button>
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                                {encRegionais.map(enc => {
-                                    const selected = selectedEncRegionais.includes(enc.id);
-                                    return (
-                                        <button key={enc.id} type="button"
-                                            onClick={() => setSelectedEncRegionais(prev => selected ? prev.filter(id => id !== enc.id) : [...prev, enc.id])}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shadow-sm ${selected ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                        >
-                                            {enc.name} {enc.city ? `(${enc.city}/${enc.state})` : ''}
-                                        </button>
-                                    );
-                                })}
+                        <div className="space-y-2">
+                            <label className={labelClass}>Encarregado(s) Regional(is)</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <select
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        if (val && !selectedEncRegionais.includes(val)) {
+                                            setSelectedEncRegionais(prev => [...prev, val]);
+                                        }
+                                        e.target.value = "";
+                                    }}
+                                    className={selectClass + " flex-1"}
+                                    defaultValue=""
+                                >
+                                    <option value="" disabled>Selecione para adicionar...</option>
+                                    {encRegionais.filter(enc => !selectedEncRegionais.includes(enc.id)).map(enc => (
+                                        <option key={enc.id} value={enc.id}>{enc.name} {enc.city ? `(${enc.city}/${enc.state})` : ''}</option>
+                                    ))}
+                                </select>
+                                <button type="button" onClick={() => setShowEncModal(true)} className="flex items-center justify-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 py-3 sm:py-0 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="Cadastrar Novo Encarregado">
+                                    <Plus size={16} /> Novo
+                                </button>
                             </div>
+
+                            {/* Selected Pills */}
+                            {selectedEncRegionais.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                    {selectedEncRegionais.map(id => {
+                                        const enc = encRegionais.find(e => e.id === id);
+                                        if (!enc) return null;
+                                        return (
+                                            <div key={id} className="flex items-center gap-1.5 bg-indigo-100 text-indigo-800 px-3 py-1.5 rounded-lg text-sm font-semibold border border-indigo-200 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                <span>{enc.name}</span>
+                                                <button type="button" onClick={() => setSelectedEncRegionais(prev => prev.filter(eId => eId !== id))} className="text-indigo-500 hover:text-indigo-900 bg-white/50 hover:bg-white rounded-full p-0.5 transition-colors" title="Remover da lista">
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </section>
 
