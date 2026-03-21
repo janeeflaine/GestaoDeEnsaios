@@ -22,12 +22,24 @@ ALTER TABLE ministry ADD COLUMN IF NOT EXISTS profile_id UUID REFERENCES profile
 -- RLS for new tables
 ALTER TABLE congregation_categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read Categories" ON congregation_categories FOR SELECT USING (true);
-CREATE POLICY "Public Insert Categories" ON congregation_categories FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Categories" ON congregation_categories FOR UPDATE USING (true);
-CREATE POLICY "Public Delete Categories" ON congregation_categories FOR DELETE USING (true);
+CREATE POLICY "Admin Insert Categories" ON congregation_categories FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
+CREATE POLICY "Admin Update Categories" ON congregation_categories FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
+CREATE POLICY "Admin Delete Categories" ON congregation_categories FOR DELETE USING (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
 
 ALTER TABLE ministry_roles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read Roles" ON ministry_roles FOR SELECT USING (true);
-CREATE POLICY "Public Insert Roles" ON ministry_roles FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Roles" ON ministry_roles FOR UPDATE USING (true);
-CREATE POLICY "Public Delete Roles" ON ministry_roles FOR DELETE USING (true);
+CREATE POLICY "Admin Insert Roles" ON ministry_roles FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
+CREATE POLICY "Admin Update Roles" ON ministry_roles FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
+CREATE POLICY "Admin Delete Roles" ON ministry_roles FOR DELETE USING (
+  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'ADMIN')
+);
