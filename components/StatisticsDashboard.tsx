@@ -4,7 +4,9 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals } from '../utils/orchestraCalculations';
-import { generateStatisticsPDF } from '../utils/pdfReport';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import PdfExportTemplate from './PdfExportTemplate';
 import { supabase } from '../supabaseClient';
 import StatisticsForm from './StatisticsForm';
 
@@ -23,6 +25,9 @@ export default function StatisticsDashboard({ congregations, events, userProfile
     const [showForm, setShowForm] = useState(false);
     const [editingStat, setEditingStat] = useState<EventStatistic | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState<string | null>(null);
+    const [statToExport, setStatToExport] = useState<EventStatistic | null>(null);
+    const pdfTemplateRef = React.useRef<HTMLDivElement>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -105,10 +110,52 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         fetchData();
     };
 
-    const handleExportPDF = (stat: EventStatistic) => {
-        const congregation = congregations.find(c => c.id === stat.congregation_id);
-        const anciao = anciaes.find(a => a.id === stat.anciao_id);
-        generateStatisticsPDF(stat, congregation, anciao);
+    const handleExportPDF = async (stat: EventStatistic) => {
+        setIsExporting(stat.id!);
+        setStatToExport(stat);
+
+        // Wait for React to render the template and Recharts to draw the SVG
+        setTimeout(async () => {
+            if (!pdfTemplateRef.current) {
+                setIsExporting(null);
+                setStatToExport(null);
+                return;
+            }
+
+            try {
+                const canvas = await html2canvas(pdfTemplateRef.current, {
+                    scale: 2, // High resolution
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+
+                // A4 dimensions: 210 x 297 mm
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+                const congregation = congregations.find(c => c.id === stat.congregation_id);
+                const fileName = `Estatistica_${congregation?.name || 'Evento'}_${stat.event_date}.pdf`;
+
+                pdf.save(fileName);
+            } catch (error) {
+                console.error("Erro ao gerar PDF:", error);
+                alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
+            } finally {
+                setIsExporting(null);
+                setStatToExport(null);
+            }
+        }, 1000); // Wait 1s for the DOM to be fully ready
     };
 
     if (loading) {
@@ -228,8 +275,17 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                                     </p>
                                 </div>
                                 <div className="flex gap-2 flex-shrink-0">
-                                    <button onClick={() => handleExportPDF(stat)} className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all font-semibold flex items-center justify-center" title="Exportar PDF">
-                                        <FileText size={18} />
+                                    <button
+                                        onClick={() => handleExportPDF(stat)}
+                                        disabled={isExporting === stat.id}
+                                        className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all font-semibold flex items-center justify-center min-w-[40px]"
+                                        title="Exportar PDF"
+                                    >
+                                        {isExporting === stat.id ? (
+                                            <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                        ) : (
+                                            <FileText size={18} />
+                                        )}
                                     </button>
                                     <button onClick={() => { setEditingStat(stat); setShowForm(true); }} className="bg-slate-50 text-slate-600 p-2.5 rounded-xl hover:bg-slate-100 transition-all" title="Editar">
                                         <Edit2 size={18} />
@@ -254,6 +310,16 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                     editingStat={editingStat}
                     onClose={() => setShowForm(false)}
                     onSaved={() => { setShowForm(false); fetchData(); }}
+                />
+            )}
+
+            {/* Hidden PDF Export Template */}
+            {statToExport && (
+                <PdfExportTemplate
+                    ref={pdfTemplateRef}
+                    stat={statToExport}
+                    congregation={congregations.find(c => c.id === statToExport.congregation_id)}
+                    anciao={anciaes.find(a => a.id === statToExport.anciao_id)}
                 />
             )}
         </div>

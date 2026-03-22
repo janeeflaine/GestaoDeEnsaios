@@ -13,7 +13,12 @@
       theme: {
         extend: {
           colors: {
-            brand: { DEFAULT: '#6366f1', hover: '#818cf8', subtle: 'rgba(99, 102, 241, 0.15)' }
+            brand: { DEFAULT: '#6366f1', hover: '#818cf8', subtle: 'rgba(99, 102, 241, 0.15)' },
+            'ccb-gold': '#d4bc8d',
+            'ccb-blue-dark': '#1e293b',
+            'ccb-blue-light': '#1e3a8a',
+            'ccb-green': '#14532d',
+            'ccb-gray': '#9ca3af',
           },
           fontFamily: { sans: ['Inter', 'sans-serif'] },
         }
@@ -30,6 +35,16 @@
       }
       .glass-panel {
         @apply backdrop-blur-xl bg-slate-900/80 border-b border-white/10;
+      }
+      .a4-page {
+        width: 210mm;
+        height: 297mm;
+        margin: 0 auto;
+        background-color: #f9fafb;
+        position: relative;
+        overflow: hidden;
+        padding: 10mm;
+        box-sizing: border-box;
       }
     }
     body {
