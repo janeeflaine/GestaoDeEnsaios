@@ -78,7 +78,7 @@ function categoryCard(
                             {
                                 stack: [
                                     { text: 'Total', fontSize: 6, color: C.labelColor, alignment: 'center' },
-                                    { text: idealStr, fontSize: 22, bold: true, color: C.textDark, alignment: 'center' },
+                                    { text: `${realPct}%`, fontSize: 22, bold: true, color: C.textDark, alignment: 'center' },
                                 ],
                                 width: '*',
                             },
