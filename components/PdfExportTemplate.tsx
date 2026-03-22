@@ -14,7 +14,6 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
     const ft = calcFamilyTotals(stat);
     const mt = calcMinistryTotals(stat);
 
-    // Extract formatted date 
     const eventDate = new Date(stat.event_date + 'T00:00:00');
     const day = String(eventDate.getDate()).padStart(2, '0');
     const month = eventDate.toLocaleDateString('pt-BR', { month: 'long' });
@@ -28,7 +27,6 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
     const acordeonPct = Math.round((ft.acordeon / totalInstruments) * 100);
 
     const allInstKeys = [...STAT_INSTRUMENTS.cordas, ...STAT_INSTRUMENTS.madeiras, ...STAT_INSTRUMENTS.metais, ...STAT_INSTRUMENTS.acordeon];
-    // Cast to Number to prevent string max comparisons (e.g., "11" < "2") which breaks CSS width percentage
     const maxInstCount = Math.max(1, ...allInstKeys.map(i => Number((stat as any)[i.key]) || 0));
 
     type RowData = { name: string; count: number | null; isHeader: boolean; bg: string; text?: string; barColor: string };
@@ -37,13 +35,11 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
     const addFamily = (label: string, total: number, bg: string, barColor: string, text: string, instruments: readonly { key: string; label: string }[]) => {
         tableRows.push({ name: label, count: total, isHeader: true, bg, text, barColor: '' });
         instruments.forEach((inst) => {
-            // Cast to Number again here
             const count = Number((stat as any)[inst.key]) || 0;
             tableRows.push({ name: inst.label, count, isHeader: false, bg: 'bg-white', barColor });
         });
     };
 
-    // Specific colors match Photo 2
     const colorCordas = '#c5a871';
     const colorMadeiras = '#132863';
     const colorMetais = '#135c2f';
@@ -73,119 +69,92 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
             <div
                 ref={ref}
                 id="pdf-export-template"
-                className="a4-page relative overflow-hidden"
-                style={{ width: '794px', height: '1123px', padding: '38px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                className="a4-page relative"
+                style={{ width: '794px', height: '1123px', padding: '32px 34px', boxSizing: 'border-box', backgroundColor: 'white', overflow: 'hidden' }}
             >
-                {/* Dotted background pattern spanning the entire A4 area securely */}
+                {/* Dotted background */}
                 <div
                     className="absolute inset-0 z-0 opacity-40 pointer-events-none"
                     style={{ backgroundImage: 'radial-gradient(#94a3b8 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}
-                ></div>
+                />
 
-                {/* Content Overlay */}
-                <div className="relative z-10 w-full h-full flex flex-col gap-4">
+                {/* Content */}
+                <div className="relative z-10 w-full h-full flex flex-col" style={{ gap: '10px' }}>
 
-                    {/* Header */}
-                    <header className="text-center py-3 bg-white/95 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center shrink-0">
-                        <h1 className="text-[26px] font-black text-gray-800 tracking-tight leading-none" style={{ color: '#272f3d' }}>CONGREGAÇÃO CRISTÃ NO BRASIL</h1>
-                        <p className="text-[12px] font-bold text-gray-600 mt-1 uppercase">{(congregation?.name || '')} - {congregation?.city || ''} / {congregation?.state || ''}</p>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">ESTATÍSTICA - ENSAIO REGIONAL</p>
-                        <p className="text-[9px] uppercase font-bold text-gray-400 mt-1">{eventDateFormatted}</p>
+                    {/* ── Header ── */}
+                    <header className="text-center py-2.5 bg-white/95 rounded-2xl shadow-sm border border-gray-100 shrink-0">
+                        <h1 className="text-[24px] font-black tracking-tight leading-none" style={{ color: '#272f3d' }}>CONGREGAÇÃO CRISTÃ NO BRASIL</h1>
+                        <p className="text-[11px] font-bold text-gray-600 mt-1 uppercase">{congregation?.name || ''} - {congregation?.city || ''} / {congregation?.state || ''}</p>
+                        <p className="text-[9px] font-bold text-gray-500 uppercase mt-0.5">ESTATÍSTICA - ENSAIO REGIONAL</p>
+                        <p className="text-[8px] uppercase font-bold text-gray-400 mt-0.5">{eventDateFormatted}</p>
                     </header>
 
-                    {/* Presidency Section (Top 3 rounded pills) */}
-                    <section className="grid grid-cols-3 gap-3 shrink-0">
-                        {/* Ancião */}
-                        <div className="bg-white rounded-full py-1.5 px-2 shadow-sm border border-gray-200 flex items-center gap-2">
-                            <div className="p-2 bg-gray-50 rounded-full border border-gray-200 shrink-0">
-                                <Mic className="w-4 h-4 text-gray-600" />
+                    {/* ── Presidency Pills ── */}
+                    <section className="grid grid-cols-3 gap-2 shrink-0">
+                        {[
+                            { icon: <Mic className="w-3.5 h-3.5 text-gray-600" />, l1: `Ancião: Ir. ${anciao?.name || ''}`, l2: `LOCALIDADE: ${congregation?.city} - ${congregation?.state}` },
+                            { icon: <BookOpen className="w-3.5 h-3.5 text-gray-600" />, l1: 'Palavra:', l2: (stat.palavra || '') },
+                            { icon: <PenLine className="w-3.5 h-3.5 text-gray-600" />, l1: `Enc. Reg.: Ir. ${encRegional?.name || '-'}`, l2: `LOCALIDADE: ${encRegional?.city ? `${encRegional.city} - ${encRegional.state}` : '-'}` },
+                        ].map((p, i) => (
+                            <div key={i} className="bg-white rounded-full py-1 px-2 shadow-sm border border-gray-200 flex items-center gap-1.5">
+                                <div className="p-1.5 bg-gray-50 rounded-full border border-gray-200 shrink-0">{p.icon}</div>
+                                <div className="flex flex-col overflow-hidden">
+                                    <p className="text-[8px] font-black text-gray-600 uppercase truncate">{p.l1}</p>
+                                    <p className="text-[7px] font-bold text-gray-400 uppercase truncate">{p.l2}</p>
+                                </div>
                             </div>
-                            <div className="flex flex-col justify-center overflow-hidden">
-                                <p className="text-[9px] font-black text-gray-600 uppercase truncate">Ancião: Ir. {anciao?.name || ''}</p>
-                                <p className="text-[7.5px] font-bold text-gray-400 uppercase truncate">LOCALIDADE: {congregation?.city} - {congregation?.state}</p>
-                            </div>
-                        </div>
-
-                        {/* Palavra */}
-                        <div className="bg-white rounded-full py-1.5 px-2 shadow-sm border border-gray-200 flex items-center gap-2">
-                            <div className="p-2 bg-gray-50 rounded-full border border-gray-200 shrink-0">
-                                <BookOpen className="w-4 h-4 text-gray-600" />
-                            </div>
-                            <div className="flex flex-col justify-center overflow-hidden">
-                                <p className="text-[8.5px] font-bold text-gray-400 uppercase truncate mb-0.5">Palavra:</p>
-                                <p className="text-[10px] font-black text-gray-800 uppercase truncate">{(stat.palavra || '')}</p>
-                            </div>
-                        </div>
-
-                        {/* Enc Regional */}
-                        <div className="bg-white rounded-full py-1.5 px-2 shadow-sm border border-gray-200 flex items-center gap-2">
-                            <div className="p-2 bg-gray-50 rounded-full border border-gray-200 shrink-0">
-                                <PenLine className="w-4 h-4 text-gray-600" />
-                            </div>
-                            <div className="flex flex-col justify-center overflow-hidden">
-                                <p className="text-[9px] font-black text-gray-600 uppercase truncate">Enc. Reg.: Ir. {encRegional?.name || '-'}</p>
-                                <p className="text-[7.5px] font-bold text-gray-400 uppercase truncate">LOCALIDADE: {encRegional?.city ? `${encRegional.city} - ${encRegional.state}` : '-'}</p>
-                            </div>
-                        </div>
+                        ))}
                     </section>
 
-                    {/* Hinos Section */}
-                    <section className="flex gap-3 shrink-0">
-                        <div className="flex items-stretch bg-white rounded-lg overflow-hidden w-64 shadow-sm border border-gray-200">
-                            <div className="bg-gray-200 px-3 py-2 flex items-center justify-center border-r border-gray-200">
-                                <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Hino Abertura</span>
+                    {/* ── Hinos ── */}
+                    <section className="flex gap-2 shrink-0">
+                        <div className="flex items-stretch bg-white rounded-lg overflow-hidden w-56 shadow-sm border border-gray-200">
+                            <div className="bg-gray-200 px-2.5 py-1.5 flex items-center border-r border-gray-200">
+                                <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Hino Abertura</span>
                             </div>
                             <div className="flex-1 flex items-center justify-center">
-                                <span className="text-xl font-black text-gray-900">{stat.hino_abertura || ''}</span>
+                                <span className="text-lg font-black text-gray-900">{stat.hino_abertura || ''}</span>
                             </div>
                         </div>
                         <div className="flex items-stretch bg-white rounded-lg overflow-hidden flex-1 shadow-sm border border-gray-200">
-                            <div className="bg-gray-200 px-3 py-2 flex items-center justify-center border-r border-gray-200">
-                                <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Hinos Ensaiados</span>
+                            <div className="bg-gray-200 px-2.5 py-1.5 flex items-center border-r border-gray-200">
+                                <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Hinos Ensaiados</span>
                             </div>
                             <div className="flex-1 flex items-center justify-center">
-                                <span className="text-xl font-black text-gray-900">{stat.hinos_ensaiados || ''}</span>
+                                <span className="text-lg font-black text-gray-900">{stat.hinos_ensaiados || ''}</span>
                             </div>
                         </div>
                     </section>
 
-                    {/* Two Column Content */}
-                    <div className="flex gap-4 flex-1 overflow-hidden">
+                    {/* ── Two-Column Body ── */}
+                    <div className="flex gap-3 flex-1 overflow-hidden min-h-0">
 
-                        {/* Left Column (Instrument List) */}
-                        <aside className="w-[42%] flex flex-col gap-2 min-h-0">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden pb-1">
-                                {/* Table Header */}
-                                <div className="bg-gray-100 text-center py-2.5 border-b border-gray-300">
-                                    <h2 className="text-[12px] font-black text-gray-700 uppercase tracking-wide">VISÃO GERAL DA ORQUESTRA</h2>
+                        {/* LEFT – instrument list */}
+                        <aside className="w-[42%] flex flex-col min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+                                <div className="bg-gray-100 text-center py-2 border-b border-gray-300 shrink-0">
+                                    <h2 className="text-[11px] font-black text-gray-700 uppercase tracking-wide">VISÃO GERAL DA ORQUESTRA</h2>
                                 </div>
-
-                                {/* Table Body */}
-                                <div className="flex-1 text-[9px] pt-1 px-1 flex flex-col gap-[1px]">
+                                <div className="flex-1 pt-0.5 px-1 flex flex-col gap-0 overflow-hidden">
                                     {tableRows.map((row, idx) => {
                                         if (row.isHeader) {
                                             return (
-                                                <div key={`head-${idx}`} className={`${row.bg} ${row.text} font-black px-2 py-[2px] uppercase mt-1 mb-[1px]`} style={{ letterSpacing: '0.05em' }}>
+                                                <div key={`h-${idx}`} className={`${row.bg} ${row.text} font-black px-2 py-[1.5px] uppercase mt-[3px]`} style={{ fontSize: '8px', letterSpacing: '0.05em' }}>
                                                     {row.name}
                                                 </div>
                                             );
                                         }
+                                        const pct = row.count && row.count > 0 ? Math.max((row.count / maxInstCount) * 100, 3) : 0;
                                         return (
-                                            <div key={`row-${idx}`} className={`flex items-center px-1.5 py-[2px] ${row.bg}`}>
-                                                <div className="w-[35%] truncate font-semibold text-gray-700 uppercase" style={{ fontSize: '8px' }}>{row.name}</div>
-                                                <div className="w-[50%] flex items-center h-full px-1">
-                                                    {row.count !== null && row.count > 0 && (
-                                                        <div
-                                                            className={`${row.barColor}`}
-                                                            style={{ height: '7px', width: `${Math.max((row.count / maxInstCount) * 100, 2)}%` }}
-                                                        ></div>
-                                                    )}
-                                                    {row.count === 0 && (
-                                                        <div className="bg-red-600" style={{ height: '7px', width: '2px' }}></div>
-                                                    )}
+                                            <div key={`r-${idx}`} className="flex items-center px-1 py-[1px]">
+                                                <div className="shrink-0 truncate font-semibold text-gray-700 uppercase" style={{ fontSize: '7.5px', width: '38%' }}>{row.name}</div>
+                                                {/* bar container with overflow hidden so it never bleeds */}
+                                                <div className="overflow-hidden flex items-center" style={{ width: '47%', height: '7px' }}>
+                                                    {pct > 0 && <div className={row.barColor} style={{ height: '7px', width: `${pct}%`, minWidth: '2px' }} />}
+                                                    {row.count === 0 && <div className="bg-red-600" style={{ height: '7px', width: '2px' }} />}
                                                 </div>
-                                                <div className="w-[15%] text-right font-bold text-gray-600" style={{ fontSize: '9px' }}>
-                                                    {row.count === null || row.count === 0 ? '' : row.count}
+                                                <div className="text-right font-bold text-gray-600" style={{ fontSize: '8.5px', width: '15%' }}>
+                                                    {row.count ? row.count : ''}
                                                 </div>
                                             </div>
                                         );
@@ -194,158 +163,126 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
                             </div>
                         </aside>
 
-                        {/* Right Column (Dashboard) */}
-                        <main className="w-[58%] flex flex-col gap-3 min-h-0">
-                            <h2 className="text-[10px] font-black text-gray-800 uppercase tracking-widest text-center relative flex justify-center items-center gap-4 shrink-0">
-                                <span className="h-px bg-gray-300 flex-1"></span>
-                                DASHBOARD DE ANÁLISE
-                                <span className="h-px bg-gray-300 flex-1"></span>
+                        {/* RIGHT – dashboard */}
+                        <main className="w-[58%] flex flex-col min-h-0" style={{ gap: '8px' }}>
+                            <h2 className="text-[9px] font-black text-gray-800 uppercase tracking-widest text-center flex justify-center items-center gap-3 shrink-0">
+                                <span className="h-px bg-gray-300 flex-1" />DASHBOARD DE ANÁLISE<span className="h-px bg-gray-300 flex-1" />
                             </h2>
 
-                            {/* Dashboard Grid (4 Cards) */}
-                            <div className="grid grid-cols-2 gap-3 shrink-0">
-                                {/* Func to render cards exactly like photo 2 */}
+                            {/* 4 family cards */}
+                            <div className="grid grid-cols-2 gap-2 shrink-0">
                                 {[
                                     { title: 'CORDAS', color: colorCordas, pct: cordasPct, total: ft.cordas, ideal: '50%' },
                                     { title: 'MADEIRAS', color: colorMadeiras, pct: madeirasPct, total: ft.madeiras, ideal: '25%' },
                                     { title: 'METAIS', color: colorMetais, pct: metaisPct, total: ft.metais, ideal: '25%' },
                                     { title: 'ACORDEON', color: colorAcordeon, pct: acordeonPct, total: ft.acordeon, ideal: '-' }
                                 ].map(c => (
-                                    <div key={c.title} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex flex-col justify-between" style={{ minHeight: '85px' }}>
+                                    <div key={c.title} className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200 flex flex-col justify-between" style={{ minHeight: '72px' }}>
                                         <div className="flex justify-between">
                                             <div className="flex flex-col">
-                                                <span className="text-[9px] font-black tracking-widest uppercase" style={{ color: c.color }}>{c.title}</span>
-                                                <span className="text-[7.5px] font-bold text-gray-400 uppercase mt-0.5">Total</span>
-                                                <span className="text-[28px] leading-none font-black text-gray-900 mt-0.5 tracking-tight">{c.total}</span>
+                                                <span className="font-black tracking-widest uppercase" style={{ fontSize: '8px', color: c.color }}>{c.title}</span>
+                                                <span className="font-bold text-gray-400 uppercase" style={{ fontSize: '7px' }}>Total</span>
+                                                <span className="font-black text-gray-900 leading-none tracking-tight" style={{ fontSize: '24px' }}>{c.total}</span>
                                             </div>
-                                            <div className="flex flex-col items-end pt-1">
-                                                <span className="text-[24px] leading-none font-black text-gray-800">{c.pct > 0 || c.title !== 'ACORDEON' ? `${c.pct}%` : '-'}</span>
-                                                <span className="text-[7.5px] font-bold text-gray-400 mt-1 uppercase">Ideal: {c.ideal}</span>
+                                            <div className="flex flex-col items-end">
+                                                <span className="font-black text-gray-800 leading-none" style={{ fontSize: '20px' }}>{c.pct > 0 || c.title !== 'ACORDEON' ? `${c.pct}%` : '-'}</span>
+                                                <span className="font-bold text-gray-400 uppercase mt-0.5" style={{ fontSize: '7px' }}>Ideal: {c.ideal}</span>
                                             </div>
                                         </div>
-                                        {/* Colored Progress Bar spanning bottom left */}
-                                        <div className="w-full bg-gray-100 h-2 rounded-full mt-[6px] mb-[2px] flex overflow-hidden">
-                                            <div className="h-full rounded-full" style={{ width: `${Math.min(c.pct, 100)}%`, backgroundColor: c.color }}></div>
+                                        <div className="w-full bg-gray-100 rounded-full overflow-hidden mt-1" style={{ height: '6px' }}>
+                                            <div className="h-full rounded-full" style={{ width: `${Math.min(c.pct, 100)}%`, backgroundColor: c.color }} />
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Lower Dashboard Section */}
-                            <div className="flex gap-3 flex-1 min-h-0">
-
-                                {/* Category Donut */}
-                                <div className="bg-white rounded-2xl px-2 py-3 shadow-sm border border-gray-200 flex flex-col items-center w-[40%]">
-                                    <h3 className="text-[8.5px] font-black text-gray-500 uppercase text-center mb-1 tracking-widest">TOTAL DE MÚSICOS<br />POR CATEGORIA</h3>
+                            {/* Donut + Personnel */}
+                            <div className="flex gap-2 flex-1 min-h-0 overflow-hidden">
+                                {/* Donut */}
+                                <div className="bg-white rounded-xl px-1.5 py-2 shadow-sm border border-gray-200 flex flex-col items-center w-[38%]">
+                                    <h3 className="font-black text-gray-500 uppercase text-center tracking-widest" style={{ fontSize: '7.5px' }}>TOTAL DE MÚSICOS<br />POR CATEGORIA</h3>
                                     <div className="flex-1 w-full relative flex items-center justify-center">
-                                        <PieChart width={130} height={130}>
-                                            <Pie
-                                                data={donutData}
-                                                cx={65}
-                                                cy={65}
-                                                innerRadius={40}
-                                                outerRadius={60}
-                                                stroke="none"
-                                                dataKey="value"
-                                                isAnimationActive={false}
-                                            >
-                                                {donutData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                                                ))}
+                                        <PieChart width={110} height={110}>
+                                            <Pie data={donutData} cx={55} cy={55} innerRadius={34} outerRadius={50} stroke="none" dataKey="value" isAnimationActive={false}>
+                                                {donutData.map((e, i) => <Cell key={i} fill={e.fill} />)}
                                             </Pie>
                                         </PieChart>
-                                        {/* Center Text inside Donut */}
                                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span className="text-3xl font-black text-gray-900 leading-none">{ft.total}</span>
-                                            <span className="text-[7px] font-bold text-gray-500 uppercase mt-0.5">Total</span>
+                                            <span className="font-black text-gray-900 leading-none" style={{ fontSize: '22px' }}>{ft.total}</span>
+                                            <span className="font-bold text-gray-500 uppercase" style={{ fontSize: '6px' }}>Total</span>
                                         </div>
                                     </div>
-
-                                    {/* Donut Legend */}
-                                    <div className="w-full mt-2 flex justify-center">
-                                        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: colorCordas }}></div><span className="text-[7.5px] font-bold text-gray-500 uppercase">Cordas</span></div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: colorMadeiras }}></div><span className="text-[7.5px] font-bold text-gray-500 uppercase">Madeiras</span></div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: colorMetais }}></div><span className="text-[7.5px] font-bold text-gray-500 uppercase">Metais</span></div>
-                                            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: colorAcordeon }}></div><span className="text-[7.5px] font-bold text-gray-500 uppercase">Acordeon</span></div>
-                                        </div>
+                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1">
+                                        {[{ c: colorCordas, l: 'Cordas' }, { c: colorMadeiras, l: 'Madeiras' }, { c: colorMetais, l: 'Metais' }, { c: colorAcordeon, l: 'Acordeon' }].map(lg => (
+                                            <div key={lg.l} className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: lg.c }} /><span className="font-bold text-gray-500 uppercase" style={{ fontSize: '6.5px' }}>{lg.l}</span></div>
+                                        ))}
                                     </div>
                                 </div>
 
-                                {/* Additional Personnel (Pessoal Adicional) */}
-                                <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 flex flex-col w-[60%] justify-between">
-                                    <h3 className="text-[9px] font-black text-gray-600 uppercase text-center tracking-widest relative flex items-center justify-center gap-2 shrink-0">
-                                        <span className="h-px bg-gray-200 flex-1"></span>
-                                        PESSOAL ADICIONAL
-                                        <span className="h-px bg-gray-200 flex-1"></span>
+                                {/* Personnel */}
+                                <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-200 flex flex-col w-[62%] justify-between overflow-hidden">
+                                    <h3 className="font-black text-gray-600 uppercase text-center tracking-widest flex items-center justify-center gap-1 shrink-0" style={{ fontSize: '8px' }}>
+                                        <span className="h-px bg-gray-200 flex-1" />PESSOAL ADICIONAL<span className="h-px bg-gray-200 flex-1" />
                                     </h3>
 
-                                    <div className="flex gap-2 mt-2 shrink-0">
-                                        <div className="flex-1 bg-white rounded-xl py-1.5 px-1 text-center border border-gray-200 shadow-sm flex flex-col justify-center">
-                                            <p className="text-[9px] font-black text-gray-600 uppercase tracking-wider">Músicos</p>
-                                            <p className="text-2xl font-black text-gray-900 mt-1">{stat.musicos || 0}</p>
+                                    <div className="flex gap-1.5 mt-1 shrink-0">
+                                        <div className="flex-1 bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm">
+                                            <p className="font-black text-gray-600 uppercase" style={{ fontSize: '8px' }}>Músicos</p>
+                                            <p className="font-black text-gray-900" style={{ fontSize: '20px', lineHeight: 1 }}>{stat.musicos || 0}</p>
                                         </div>
-                                        <div className="flex-1 bg-white rounded-xl py-1.5 px-1 text-center border border-gray-200 shadow-sm flex flex-col justify-center">
-                                            <p className="text-[9px] font-black text-gray-600 uppercase tracking-wider">Organistas</p>
-                                            <p className="text-2xl font-black text-gray-900 mt-1">{stat.organistas || 0}</p>
+                                        <div className="flex-1 bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm">
+                                            <p className="font-black text-gray-600 uppercase" style={{ fontSize: '8px' }}>Organistas</p>
+                                            <p className="font-black text-gray-900" style={{ fontSize: '20px', lineHeight: 1 }}>{stat.organistas || 0}</p>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white rounded-xl py-1.5 px-3 text-center border border-gray-200 shadow-sm mt-1.5 flex items-center justify-center gap-2 shrink-0">
-                                        <Users className="w-4 h-4 text-gray-500" />
+                                    <div className="bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm mt-1 flex items-center justify-center gap-1.5 shrink-0">
+                                        <Users className="w-3.5 h-3.5 text-gray-500" />
                                         <div>
-                                            <p className="text-[9px] font-black text-gray-600 uppercase tracking-wider leading-none">Músicos + Organistas</p>
-                                            <p className="text-[24px] font-black text-gray-900 leading-none mt-1">{mt.musicosOrganistas}</p>
+                                            <p className="font-black text-gray-600 uppercase leading-none" style={{ fontSize: '8px' }}>Músicos + Organistas</p>
+                                            <p className="font-black text-gray-900 leading-none mt-0.5" style={{ fontSize: '20px' }}>{mt.musicosOrganistas}</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-3 gap-1.5 mt-2 flex-1 items-stretch">
+                                    <div className="grid grid-cols-3 gap-1 mt-1 flex-1 items-stretch overflow-hidden">
                                         {ministryItems.map((item, idx) => (
-                                            <div key={idx} className="bg-white rounded-[8px] py-1 text-center border border-gray-200 shadow-sm flex flex-col justify-between">
-                                                <p className="text-[7px] font-bold text-gray-600 uppercase px-0.5 leading-tight grow flex items-center justify-center">{item.name}</p>
-                                                <p className="text-[15px] font-black text-gray-900 leading-none mt-0.5">{item.value}</p>
+                                            <div key={idx} className="bg-white rounded-md py-0.5 text-center border border-gray-200 shadow-sm flex flex-col justify-between">
+                                                <p className="font-bold text-gray-600 uppercase px-0.5 leading-tight flex items-center justify-center" style={{ fontSize: '6px', minHeight: '16px' }}>{item.name}</p>
+                                                <p className="font-black text-gray-900 leading-none" style={{ fontSize: '13px' }}>{item.value}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Bottom Final Row Totals (Like in Photo 2) */}
-                            <div className="flex justify-between items-stretch gap-3 h-[72px] shrink-0 mt-1">
-                                {/* Total Geral Box */}
-                                <div className="bg-[#1f2937] rounded-2xl p-3 flex items-center justify-between text-white shadow-md w-[45%]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="opacity-80">
-                                            <Users className="w-8 h-8" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black tracking-widest uppercase text-gray-300">Total Geral:</span>
-                                            <span className="text-[44px] font-black leading-none mt-[-2px] tracking-tight">{mt.totalGeral}</span>
-                                        </div>
+                            {/* Bottom totals */}
+                            <div className="flex items-stretch gap-2 shrink-0" style={{ height: '58px' }}>
+                                <div className="bg-[#1f2937] rounded-xl p-2.5 flex items-center text-white shadow-md w-[42%]">
+                                    <Users className="w-7 h-7 opacity-80 shrink-0" />
+                                    <div className="flex flex-col ml-2">
+                                        <span className="font-black tracking-widest uppercase text-gray-300" style={{ fontSize: '8px' }}>Total Geral:</span>
+                                        <span className="font-black leading-none tracking-tight" style={{ fontSize: '36px' }}>{mt.totalGeral}</span>
                                     </div>
                                 </div>
-
-                                {/* Right Side breakdown (Musicos+Org vs Instruments) */}
-                                <div className="w-[55%] flex flex-col gap-1.5 justify-between">
-                                    <div className="flex-1 bg-white rounded-full px-3 flex items-center justify-between shadow-sm border border-gray-200 border-l-[5px] border-l-[#132863]">
-                                        <span className="text-[9.5px] font-black text-gray-600 uppercase tracking-wider">MÚSICOS + ORG.:</span>
-                                        <div className="bg-[#1f2937] text-white px-3 py-[2px] rounded-full text-[15px] font-black leading-none ml-1">{mt.musicosOrganistas}</div>
+                                <div className="w-[58%] flex flex-col gap-1 justify-between">
+                                    <div className="flex-1 bg-white rounded-full px-2.5 flex items-center justify-between shadow-sm border border-gray-200" style={{ borderLeftWidth: '4px', borderLeftColor: '#132863' }}>
+                                        <span className="font-black text-gray-600 uppercase tracking-wider" style={{ fontSize: '8.5px' }}>MÚSICOS + ORG.:</span>
+                                        <div className="bg-[#1f2937] text-white px-2.5 py-[1px] rounded-full font-black leading-none" style={{ fontSize: '13px' }}>{mt.musicosOrganistas}</div>
                                     </div>
-                                    <div className="flex-1 bg-white rounded-full px-3 flex items-center justify-between shadow-sm border border-gray-200 border-l-[5px] border-l-[#132863]">
-                                        <span className="text-[9.5px] font-black text-gray-600 uppercase tracking-wider">TOTAL INSTRUMENTOS:</span>
-                                        <div className="bg-[#1f2937] text-white px-3 py-[2px] rounded-full text-[15px] font-black leading-none ml-1">{Math.max(ft.total, 0)}</div>
+                                    <div className="flex-1 bg-white rounded-full px-2.5 flex items-center justify-between shadow-sm border border-gray-200" style={{ borderLeftWidth: '4px', borderLeftColor: '#132863' }}>
+                                        <span className="font-black text-gray-600 uppercase tracking-wider" style={{ fontSize: '8.5px' }}>TOTAL INSTRUMENTOS:</span>
+                                        <div className="bg-[#1f2937] text-white px-2.5 py-[1px] rounded-full font-black leading-none" style={{ fontSize: '13px' }}>{ft.total}</div>
                                     </div>
                                 </div>
                             </div>
-
                         </main>
                     </div>
 
-                    {/* Export Footer Info */}
-                    <footer className="flex justify-between items-center text-[10px] font-bold text-gray-400 pt-2 border-t border-gray-300 mt-auto shrink-0">
+                    {/* ── Footer ── */}
+                    <footer className="flex justify-between items-center text-[9px] font-bold text-gray-400 pt-1.5 border-t border-gray-300 mt-auto shrink-0">
                         <p>TEMPLATE DE EXPORTAÇÃO v1.2</p>
-                        <div className="flex items-center gap-1.5 opacity-80">
-                            <div className="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                        <div className="flex items-center gap-1 opacity-80">
+                            <div className="w-2 h-2 rounded-full bg-gray-400" />
                             <span className="font-bold">sistema</span>
                         </div>
                     </footer>
