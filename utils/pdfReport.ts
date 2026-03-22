@@ -194,7 +194,7 @@ export function generateStatisticsPDF(
     // ─── Instrument detail rows ───────────────────────────────────────
     const instrumentRows: any[][] = [];
 
-    const addFamily = (label: string, total: number, dotColor: string, bgColor: string, instruments: typeof STAT_INSTRUMENTS.cordas) => {
+    const addFamily = (label: string, total: number, dotColor: string, bgColor: string, instruments: readonly { key: string; label: string }[]) => {
         // Family header row
         instrumentRows.push([
             {
