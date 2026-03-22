@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, FileText, Calendar, Users, Music, BarChart3, Trash2, Edit2 } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { EventStatistic, Anciao, EncRegional, Congregation, RehearsalEvent } from '../types';
+import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals } from '../utils/orchestraCalculations';
 import { generateStatisticsPDF } from '../utils/pdfReport';
 import { supabase } from '../supabaseClient';
@@ -19,7 +19,7 @@ interface StatisticsDashboardProps {
 export default function StatisticsDashboard({ congregations, events, userProfileId }: StatisticsDashboardProps) {
     const [statistics, setStatistics] = useState<EventStatistic[]>([]);
     const [anciaes, setAnciaes] = useState<Anciao[]>([]);
-    const [encRegionais, setEncRegionais] = useState<EncRegional[]>([]);
+    const [encRegionais, setEncRegionais] = useState<Encarregado[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [editingStat, setEditingStat] = useState<EventStatistic | null>(null);
     const [loading, setLoading] = useState(true);
@@ -29,11 +29,11 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         const [statsRes, ancRes, encRes] = await Promise.all([
             supabase.from('event_statistics').select('*').order('event_date', { ascending: false }),
             supabase.from('anciaes').select('*').order('name'),
-            supabase.from('enc_regionais').select('*').order('name'),
+            supabase.from('conductors').select('*').eq('type', 'Regional').order('name'),
         ]);
         if (statsRes.data) setStatistics(statsRes.data as EventStatistic[]);
         if (ancRes.data) setAnciaes(ancRes.data as Anciao[]);
-        if (encRes.data) setEncRegionais(encRes.data as EncRegional[]);
+        if (encRes.data) setEncRegionais(encRes.data as Encarregado[]);
         setLoading(false);
     };
 

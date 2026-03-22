@@ -136,19 +136,14 @@ export interface Anciao {
   congregation_id?: string;
 }
 
-export interface EncRegional {
-  id: number;
-  name: string;
-  city?: string;
-  state?: string;
-}
-
 export interface EventStatistic {
   id?: string;
   event_id?: string;
   congregation_id?: string;
   event_date: string;
   anciao_id?: number;
+  anciao?: Anciao;
+  enc_regionais?: Encarregado[];
   palavra?: string;
   hino_abertura?: number;
   hinos_ensaiados?: number;

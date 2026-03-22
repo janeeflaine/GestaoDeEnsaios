@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash } from 'lucide-react';
-import { EventStatistic, Anciao, EncRegional, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent } from '../types';
+import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals, emptyStatistic } from '../utils/orchestraCalculations';
 import { supabase } from '../supabaseClient';
 
@@ -8,7 +8,7 @@ interface StatisticsFormProps {
     congregations: Congregation[];
     events: RehearsalEvent[];
     anciaes: Anciao[];
-    encRegionais: EncRegional[];
+    encRegionais: Encarregado[];
     onClose: () => void;
     onSaved: () => void;
     editingStat?: EventStatistic | null;
@@ -22,11 +22,12 @@ const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string 
 };
 
 export default function StatisticsForm({
-    congregations, events, anciaes, encRegionais,
+    congregations, events, anciaes, encRegionais: initialEncRegionais,
     onClose, onSaved, editingStat
 }: StatisticsFormProps) {
+    const encRegionais = initialEncRegionais as any[];
     const [stat, setStat] = useState<EventStatistic>(editingStat || emptyStatistic());
-    const [selectedEncRegionais, setSelectedEncRegionais] = useState<number[]>([]);
+    const [selectedEncRegionais, setSelectedEncRegionais] = useState<string[]>([]);
     const [showAnciaoModal, setShowAnciaoModal] = useState(false);
     const [showEncModal, setShowEncModal] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -53,7 +54,7 @@ export default function StatisticsForm({
             error = insertError;
             if (!error && data) {
                 for (const encId of selectedEncRegionais) {
-                    await supabase.from('stat_enc_regionais').insert({ stat_id: data.id, enc_regional_id: encId });
+                    await supabase.from('stat_conductors').insert({ stat_id: data.id, conductor_id: encId });
                 }
             }
         }
@@ -76,8 +77,8 @@ export default function StatisticsForm({
     const handleAddEnc = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
-        const { error } = await supabase.from('enc_regionais').insert({
-            name: fd.get('name') as string, city: fd.get('city') as string, state: fd.get('state') as string
+        const { error } = await supabase.from('conductors').insert({
+            id: crypto.randomUUID(), name: fd.get('name') as string, congregation: fd.get('congregation') as string, type: 'Regional'
         });
         if (!error) { setShowEncModal(false); onSaved(); }
     };
@@ -177,7 +178,7 @@ export default function StatisticsForm({
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <select
                                     onChange={(e) => {
-                                        const val = parseInt(e.target.value);
+                                        const val = e.target.value;
                                         if (val && !selectedEncRegionais.includes(val)) {
                                             setSelectedEncRegionais(prev => [...prev, val]);
                                         }
@@ -188,7 +189,7 @@ export default function StatisticsForm({
                                 >
                                     <option value="" disabled>Selecione para adicionar...</option>
                                     {encRegionais.filter(enc => !selectedEncRegionais.includes(enc.id)).map(enc => (
-                                        <option key={enc.id} value={enc.id}>{enc.name} {enc.city ? `(${enc.city}/${enc.state})` : ''}</option>
+                                        <option key={enc.id} value={enc.id}>{enc.name} {enc.congregation ? `(${enc.congregation})` : ''}</option>
                                     ))}
                                 </select>
                                 <button type="button" onClick={() => setShowEncModal(true)} className="flex items-center justify-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 py-3 sm:py-0 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="Cadastrar Novo Encarregado">
@@ -204,7 +205,7 @@ export default function StatisticsForm({
                                         if (!enc) return null;
                                         return (
                                             <div key={id} className="flex items-center gap-1.5 bg-indigo-100 text-indigo-800 px-3 py-1.5 rounded-lg text-sm font-semibold border border-indigo-200 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                <span>{enc.name}</span>
+                                                <span>{enc.name} {enc.congregation ? `(${enc.congregation})` : ''}</span>
                                                 <button type="button" onClick={() => setSelectedEncRegionais(prev => prev.filter(eId => eId !== id))} className="text-indigo-500 hover:text-indigo-900 bg-white/50 hover:bg-white rounded-full p-0.5 transition-colors" title="Remover da lista">
                                                     <X size={14} />
                                                 </button>
@@ -316,10 +317,7 @@ export default function StatisticsForm({
                         <h4 className="text-xl font-bold text-slate-800 mb-6 tracking-tight">Cadastrar Enc. Regional</h4>
                         <form onSubmit={handleAddEnc} className="space-y-5">
                             <input name="name" required placeholder="Nome" className={inputClass + ' text-left'} />
-                            <div className="grid grid-cols-2 gap-3">
-                                <input name="city" placeholder="Cidade" className={inputClass + ' text-left'} />
-                                <input name="state" placeholder="UF" maxLength={2} className={inputClass + ' text-left'} />
-                            </div>
+                            <input name="congregation" placeholder="Região / Congregação Principal (Ex: São Paulo/SP)" required className={inputClass + ' text-left'} />
                             <div className="flex gap-3">
                                 <button type="button" onClick={() => setShowEncModal(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
                                 <button type="submit" className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
