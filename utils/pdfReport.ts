@@ -76,7 +76,7 @@ export function generateStatisticsPDF(
     ];
 
     // Ministry rows
-    const ministryRows = MINISTRY_FIELDS.map(f => [
+    const ministryRows: any[] = MINISTRY_FIELDS.map(f => [
         { text: f.label.toUpperCase(), bold: true, fontSize: 8, margin: [2, 1] },
         { text: String((stat as any)[f.key] || 0), alignment: 'center', fontSize: 8, margin: [2, 1] },
     ]);
