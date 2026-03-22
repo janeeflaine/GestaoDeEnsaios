@@ -103,9 +103,9 @@ export default function StatisticsForm({
                         <div key={inst.key} className="space-y-1 min-w-0">
                             <label className="text-[11px] text-slate-500 font-bold truncate block" title={inst.label}>{inst.label}</label>
                             <input
-                                type="number" min="0"
-                                value={(stat as any)[inst.key] || 0}
-                                onChange={e => updateField(inst.key, parseInt(e.target.value) || 0)}
+                                type="number" min="0" placeholder="0"
+                                value={(stat as any)[inst.key] || ''}
+                                onChange={e => updateField(inst.key, e.target.value ? parseInt(e.target.value) : 0)}
                                 className={inputClass}
                             />
                         </div>
@@ -165,11 +165,11 @@ export default function StatisticsForm({
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelClass}><Hash size={12} /> Hino de Abertura</label>
-                                <input type="number" min="0" value={stat.hino_abertura || 0} onChange={e => setStat(p => ({ ...p, hino_abertura: parseInt(e.target.value) || 0 }))} className={inputClass} />
+                                <input type="number" min="0" placeholder="0" value={stat.hino_abertura || ''} onChange={e => setStat(p => ({ ...p, hino_abertura: e.target.value ? parseInt(e.target.value) : undefined }))} className={inputClass} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelClass}><Music size={12} /> Hinos Ensaiados</label>
-                                <input type="number" min="0" value={stat.hinos_ensaiados || 0} onChange={e => setStat(p => ({ ...p, hinos_ensaiados: parseInt(e.target.value) || 0 }))} className={inputClass} />
+                                <input type="number" min="0" placeholder="0" value={stat.hinos_ensaiados || ''} onChange={e => setStat(p => ({ ...p, hinos_ensaiados: e.target.value ? parseInt(e.target.value) : 0 }))} className={inputClass} />
                             </div>
                         </div>
                         {/* Enc. Regionais multi-select */}
