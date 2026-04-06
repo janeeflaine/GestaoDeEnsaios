@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash } from 'lucide-react';
-import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent } from '../types';
+import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash, UserCheck } from 'lucide-react';
+import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent, UserRole } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals, emptyStatistic } from '../utils/orchestraCalculations';
 import { supabase } from '../supabaseClient';
 import { insertStatistic, updateStatistic } from '../services/statistics';
+import { submitPendingAnciao } from '../services/anciaes';
 
 interface StatisticsFormProps {
     congregations: Congregation[];
@@ -16,6 +17,8 @@ interface StatisticsFormProps {
     editingStat?: EventStatistic | null;
     isGuest?: boolean;
     userId?: string;
+    userRole?: UserRole;
+    userName?: string;
 }
 
 const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -27,37 +30,80 @@ const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string 
 
 export default function StatisticsForm({
     congregations, events, anciaes, encRegionais: initialEncRegionais,
-    onClose, onSaved, editingStat, isGuest = false, userId,
+    onClose, onSaved, editingStat, isGuest = false, userId, userRole, userName,
 }: StatisticsFormProps) {
+    const isAdmin = userRole === UserRole.ADMIN;
     const encRegionais = initialEncRegionais;
-    const [stat, setStat] = useState<EventStatistic>(editingStat || emptyStatistic());
+    const [stat, setStat] = useState<EventStatistic>(() => {
+        const base = editingStat || emptyStatistic();
+        return base;
+    });
+    // Custom ancião name used locally (non-admin flow or editing a stat that had one)
+    const [customAnciaoName, setCustomAnciaoName] = useState<string>(editingStat?.anciao_nome_custom || '');
     const [selectedEncRegionais, setSelectedEncRegionais] = useState<string[]>([]);
     const [showAnciaoModal, setShowAnciaoModal] = useState(false);
     const [showEncModal, setShowEncModal] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [ancipaoInput, setAnciaoInput] = useState('');
+    const [hinosEnsaiadosList, setHinosEnsaiadosList] = useState<number[]>(() => {
+        // On edit, we only have the count — can't reconstruct the list
+        return [];
+    });
+    const [hinoInput, setHinoInput] = useState('');
 
     const familyTotals = useMemo(() => calcFamilyTotals(stat), [stat]);
     const familyPct = useMemo(() => calcFamilyPercentages(familyTotals), [familyTotals]);
-    const ministryTotals = useMemo(() => calcMinistryTotals(stat), [stat]);
+    // Keep stat.musicos always in sync with the computed instrument total
+    const statWithMusicos = useMemo(
+        () => ({ ...stat, musicos: familyTotals.total }),
+        [stat, familyTotals.total]
+    );
+    const ministryTotals = useMemo(() => calcMinistryTotals(statWithMusicos), [statWithMusicos]);
 
     const updateField = (key: string, value: number) => {
         setStat(prev => ({ ...prev, [key]: value }));
     };
 
+    const addHino = () => {
+        const n = parseInt(hinoInput.trim());
+        if (!n || n <= 0) return;
+        if (hinosEnsaiadosList.includes(n)) { setHinoInput(''); return; }
+        const next = [...hinosEnsaiadosList, n].sort((a, b) => a - b);
+        setHinosEnsaiadosList(next);
+        setStat(prev => ({ ...prev, hinos_ensaiados: next.length }));
+        setHinoInput('');
+    };
+
+    const removeHino = (n: number) => {
+        const next = hinosEnsaiadosList.filter(h => h !== n);
+        setHinosEnsaiadosList(next);
+        setStat(prev => ({ ...prev, hinos_ensaiados: next.length }));
+    };
+
+    const handleHinoKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+            e.preventDefault();
+            addHino();
+        }
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try {
+            // Merge custom ancião name into payload
+            const base = { ...statWithMusicos, anciao_nome_custom: customAnciaoName || undefined };
+
             // ── Guest mode: pass stat back to parent for sessionStorage ──
             if (isGuest) {
                 const guestStat: EventStatistic = editingStat?.id
-                    ? { ...stat, id: editingStat.id }
-                    : { ...stat, id: crypto.randomUUID() };
+                    ? { ...base, id: editingStat.id }
+                    : { ...base, id: crypto.randomUUID() };
                 onSaved(guestStat);
                 return;
             }
 
             // ── Authenticated mode ────────────────────────────────────────
-            const { id: _id, created_at: _ca, ...payload } = stat as EventStatistic & { id?: string; created_at?: string };
+            const { id: _id, created_at: _ca, ...payload } = base as EventStatistic & { id?: string; created_at?: string };
 
             if (editingStat?.id) {
                 await updateStatistic(editingStat.id, payload);
@@ -66,6 +112,10 @@ export default function StatisticsForm({
                 const saved = await insertStatistic({ ...payload, created_by: userId! });
                 for (const encId of selectedEncRegionais) {
                     await supabase.from('stat_conductors').insert({ stat_id: saved.id, conductor_id: encId });
+                }
+                // If custom ancião was used by non-admin, submit notification to admins
+                if (customAnciaoName && !isAdmin) {
+                    await submitPendingAnciao(customAnciaoName, userId, userName, saved.id);
                 }
                 onSaved();
             }
@@ -78,9 +128,29 @@ export default function StatisticsForm({
 
     const handleAddAnciao = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        const { error } = await supabase.from('anciaes').insert({ name: fd.get('name') as string });
-        if (!error) { setShowAnciaoModal(false); onSaved(undefined); }
+        const name = ancipaoInput.trim();
+
+        // Validate: must have at least two words (nome + sobrenome)
+        if (name.split(/\s+/).filter(Boolean).length < 2) {
+            alert('É obrigatório informar nome e sobrenome (ex: João Augusto).');
+            return;
+        }
+
+        if (isAdmin) {
+            // Admin: save directly to DB so it's available for everyone
+            const { error } = await supabase.from('anciaes').insert({ name });
+            if (!error) {
+                setShowAnciaoModal(false);
+                setAnciaoInput('');
+                onSaved(undefined); // refresh anciaes list
+            }
+        } else {
+            // Non-admin: use locally only, submit pending request after save
+            setCustomAnciaoName(name);
+            setStat(prev => ({ ...prev, anciao_id: undefined }));
+            setShowAnciaoModal(false);
+            setAnciaoInput('');
+        }
     };
 
     const handleAddEnc = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -158,15 +228,34 @@ export default function StatisticsForm({
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelClass}>Presidência (Ancião)</label>
-                                <div className="flex gap-2">
-                                    <select value={stat.anciao_id || ''} onChange={e => setStat(p => ({ ...p, anciao_id: parseInt(e.target.value) || undefined }))} className={selectClass + " flex-1"}>
-                                        <option value="">Selecione um Ancião...</option>
-                                        {anciaes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                    </select>
-                                    <button type="button" onClick={() => setShowAnciaoModal(true)} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm" title="Cadastrar Novo Ancião">
-                                        <Plus size={16} /> Novo
-                                    </button>
-                                </div>
+                                {customAnciaoName ? (
+                                    // Show custom ancião chip
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 shadow-sm">
+                                            <UserCheck size={16} className="text-amber-600 flex-shrink-0" />
+                                            <span className="font-semibold text-amber-800 text-sm flex-1">IR. {customAnciaoName.toUpperCase()}</span>
+                                            {!isAdmin && (
+                                                <span className="text-[10px] bg-amber-200 text-amber-700 font-bold px-2 py-0.5 rounded-full">Não cadastrado</span>
+                                            )}
+                                        </div>
+                                        <button type="button" onClick={() => setCustomAnciaoName('')}
+                                            className="p-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-500" title="Remover e escolher outro">
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <select value={stat.anciao_id || ''} onChange={e => setStat(p => ({ ...p, anciao_id: parseInt(e.target.value) || undefined }))} className={selectClass + " flex-1"}>
+                                            <option value="">Selecione um Ancião...</option>
+                                            {anciaes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </select>
+                                        <button type="button" onClick={() => setShowAnciaoModal(true)}
+                                            className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
+                                            title={isAdmin ? 'Cadastrar Novo Ancião no banco' : 'Adicionar ancião (uso local)'}>
+                                            <Plus size={16} /> Novo
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-1.5">
                                 <label className={labelClass}>Palavra</label>
@@ -176,9 +265,50 @@ export default function StatisticsForm({
                                 <label className={labelClass}><Hash size={12} /> Hino de Abertura</label>
                                 <input type="number" min="0" placeholder="0" value={stat.hino_abertura || ''} onChange={e => setStat(p => ({ ...p, hino_abertura: e.target.value ? parseInt(e.target.value) : undefined }))} className={inputClass} />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className={labelClass}><Music size={12} /> Hinos Ensaiados</label>
-                                <input type="number" min="0" placeholder="0" value={stat.hinos_ensaiados || ''} onChange={e => setStat(p => ({ ...p, hinos_ensaiados: e.target.value ? parseInt(e.target.value) : 0 }))} className={inputClass} />
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className={labelClass}>
+                                    <Music size={12} /> Hinos Ensaiados
+                                    {hinosEnsaiadosList.length > 0 && (
+                                        <span className="ml-auto text-[10px] bg-indigo-100 text-indigo-700 font-black px-2 py-0.5 rounded-full">
+                                            {hinosEnsaiadosList.length} {hinosEnsaiadosList.length === 1 ? 'hino' : 'hinos'}
+                                        </span>
+                                    )}
+                                </label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number" min="1" placeholder="Nº do hino..."
+                                        value={hinoInput}
+                                        onChange={e => setHinoInput(e.target.value)}
+                                        onKeyDown={handleHinoKeyDown}
+                                        className={inputClass + ' flex-1'}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={addHino}
+                                        className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold px-4 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm flex-shrink-0"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+                                {hinosEnsaiadosList.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {hinosEnsaiadosList.map(n => (
+                                            <div key={n} className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-sm animate-in fade-in zoom-in-95 duration-150">
+                                                <span>{n}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeHino(n)}
+                                                    className="text-white/70 hover:text-white transition-colors rounded-full p-0.5"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {hinosEnsaiadosList.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 ml-1">Digite o número e pressione Enter ou toque em +</p>
+                                )}
                             </div>
                         </div>
                         {/* Enc. Regionais multi-select */}
@@ -268,17 +398,29 @@ export default function StatisticsForm({
                             <Users size={16} /> Ministério e Administração
                         </h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {MINISTRY_FIELDS.map(field => (
-                                <div key={field.key} className="space-y-1 min-w-0">
-                                    <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
-                                    <input
-                                        type="number" min="0" placeholder="0"
-                                        value={(stat[field.key as keyof EventStatistic] as number) || ''}
-                                        onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
-                                        className={inputClass}
-                                    />
-                                </div>
-                            ))}
+                            {MINISTRY_FIELDS.map(field => {
+                                if (field.key === 'musicos') {
+                                    return (
+                                        <div key={field.key} className="space-y-1 min-w-0">
+                                            <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
+                                            <div className={`${inputClass} bg-slate-100 text-slate-500 cursor-default select-none flex items-center`} title="Calculado automaticamente a partir dos instrumentos">
+                                                {familyTotals.total}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div key={field.key} className="space-y-1 min-w-0">
+                                        <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
+                                        <input
+                                            type="number" min="0" placeholder="0"
+                                            value={(stat[field.key as keyof EventStatistic] as number) || ''}
+                                            onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                );
+                            })}
                         </div>
                         <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 grid grid-cols-2 gap-4 text-center shadow-inner">
                             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
@@ -307,12 +449,40 @@ export default function StatisticsForm({
             {showAnciaoModal && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-slate-100">
-                        <h4 className="text-xl font-bold text-slate-800 mb-6 tracking-tight">Cadastrar Ancião</h4>
-                        <form onSubmit={handleAddAnciao} className="space-y-5">
-                            <input name="name" required placeholder="Nome do Ancião" className={inputClass + ' text-left'} />
+                        <h4 className="text-xl font-bold text-slate-800 mb-2 tracking-tight">
+                            {isAdmin ? 'Cadastrar Ancião' : 'Adicionar Ancião'}
+                        </h4>
+                        {!isAdmin && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-5">
+                                <p className="text-xs text-amber-700 font-semibold">
+                                    Como você não é administrador, este nome será usado apenas neste cadastro.
+                                    Um aviso será enviado ao admin para aprovação no banco de dados.
+                                </p>
+                            </div>
+                        )}
+                        <form onSubmit={handleAddAnciao} className="space-y-5 mt-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                    Nome e Sobrenome <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    required
+                                    placeholder="Ex: João Augusto"
+                                    value={ancipaoInput}
+                                    onChange={e => setAnciaoInput(e.target.value)}
+                                    className={inputClass + ' text-left'}
+                                />
+                                <p className="text-[10px] text-slate-400 ml-1">Obrigatório informar nome e sobrenome.</p>
+                            </div>
                             <div className="flex gap-3">
-                                <button type="button" onClick={() => setShowAnciaoModal(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
+                                <button type="button" onClick={() => { setShowAnciaoModal(false); setAnciaoInput(''); }}
+                                    className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">
+                                    Cancelar
+                                </button>
+                                <button type="submit"
+                                    className={`flex-1 py-3.5 rounded-2xl font-bold transition-colors shadow-lg ${isAdmin ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200'}`}>
+                                    {isAdmin ? 'Salvar no Banco' : 'Usar neste Cadastro'}
+                                </button>
                             </div>
                         </form>
                     </div>

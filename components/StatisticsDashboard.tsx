@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X, Bell, CheckCircle, XCircle } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent } from '../types';
+import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent, UserRole, PendingAnciao } from '../types';
+import { fetchPendingAnciaes, approvePendingAnciao, rejectPendingAnciao } from '../services/anciaes';
 import { calcFamilyTotals, calcMinistryTotals } from '../utils/orchestraCalculations';
 import { generateStatisticsPDF, getStatisticsPdfDataUrl } from '../utils/pdfReport';
 import PdfPreviewModal from './modals/PdfPreviewModal';
@@ -24,14 +25,17 @@ interface StatisticsDashboardProps {
     events: RehearsalEvent[];
     isGuest?: boolean;
     userId?: string;
+    userRole?: UserRole;
+    userName?: string;
     onGoToProfile?: () => void;
 }
 
 const GUEST_BANNER_DISMISSED_KEY = 'guest_stat_banner_dismissed';
 
 export default function StatisticsDashboard({
-    congregations, events, isGuest = false, userId, onGoToProfile,
+    congregations, events, isGuest = false, userId, userRole, userName, onGoToProfile,
 }: StatisticsDashboardProps) {
+    const isAdmin = userRole === UserRole.ADMIN;
     const [statistics, setStatistics] = useState<EventStatistic[]>([]);
     const [anciaes, setAnciaes] = useState<Anciao[]>([]);
     const [encRegionais, setEncRegionais] = useState<Encarregado[]>([]);
@@ -45,6 +49,8 @@ export default function StatisticsDashboard({
     const [bannerDismissed, setBannerDismissed] = useState(
         () => sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1'
     );
+    const [pendingAnciaes, setPendingAnciaes] = useState<PendingAnciao[]>([]);
+    const [showPendingModal, setShowPendingModal] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -67,6 +73,24 @@ export default function StatisticsDashboard({
     };
 
     useEffect(() => { fetchData(); }, [isGuest, userId]);
+
+    const loadPending = useCallback(async () => {
+        if (!isAdmin) return;
+        try { setPendingAnciaes(await fetchPendingAnciaes()); } catch { /* silent */ }
+    }, [isAdmin]);
+
+    useEffect(() => { loadPending(); }, [loadPending]);
+
+    const handleApprovePending = async (p: PendingAnciao) => {
+        await approvePendingAnciao(p);
+        await loadPending();
+        fetchData(); // refresh anciaes list
+    };
+
+    const handleRejectPending = async (id: string) => {
+        await rejectPendingAnciao(id);
+        await loadPending();
+    };
 
     // ── Guest stat CRUD ───────────────────────────────────────
     const handleGuestSave = (stat: EventStatistic) => {
@@ -209,6 +233,23 @@ export default function StatisticsDashboard({
                         title="Fechar aviso"
                     >
                         <X size={18} />
+                    </button>
+                </div>
+            )}
+
+            {/* ── Admin: pending anciaes notification ─────────── */}
+            {isAdmin && pendingAnciaes.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3">
+                    <Bell size={20} className="text-blue-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-blue-800">
+                            {pendingAnciaes.length} solicitação{pendingAnciaes.length > 1 ? 'ões' : ''} de Ancião pendente{pendingAnciaes.length > 1 ? 's' : ''}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-0.5">Usuários adicionaram nomes de anciães não cadastrados.</p>
+                    </div>
+                    <button onClick={() => setShowPendingModal(true)}
+                        className="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex-shrink-0">
+                        Revisar
                     </button>
                 </div>
             )}
@@ -372,6 +413,53 @@ export default function StatisticsDashboard({
             </div>
 
             {/* ── Form Modal ───────────────────────────────────── */}
+            {/* ── Pending Anciaes Modal (admin) ────────────────── */}
+            {showPendingModal && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-6">
+                            <h4 className="text-xl font-bold text-slate-800 tracking-tight">Solicitações de Ancião</h4>
+                            <button onClick={() => setShowPendingModal(false)} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200 transition-colors">
+                                <X size={20} className="text-slate-500" />
+                            </button>
+                        </div>
+                        {pendingAnciaes.length === 0 ? (
+                            <p className="text-slate-500 text-center py-8">Nenhuma solicitação pendente.</p>
+                        ) : (
+                            <div className="space-y-3 max-h-96 overflow-y-auto">
+                                {pendingAnciaes.map(p => (
+                                    <div key={p.id} className="bg-slate-50 rounded-2xl p-4 flex items-start gap-3 border border-slate-100">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-slate-800">IR. {p.name.toUpperCase()}</p>
+                                            {p.requester_name && (
+                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                    Solicitado por: <span className="font-semibold text-slate-600">{p.requester_name}</span>
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                {p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-2 flex-shrink-0">
+                                            <button onClick={() => handleApprovePending(p)}
+                                                className="flex items-center gap-1 bg-green-50 text-green-700 font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                                                title="Aprovar e salvar no banco">
+                                                <CheckCircle size={14} /> Aprovar
+                                            </button>
+                                            <button onClick={() => handleRejectPending(p.id)}
+                                                className="flex items-center gap-1 bg-red-50 text-red-600 font-bold text-xs px-3 py-2 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                                                title="Rejeitar">
+                                                <XCircle size={14} /> Rejeitar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {showForm && (
                 <StatisticsForm
                     congregations={congregations}
@@ -381,6 +469,8 @@ export default function StatisticsDashboard({
                     editingStat={editingStat}
                     isGuest={isGuest}
                     userId={userId}
+                    userRole={userRole}
+                    userName={userName}
                     onClose={() => setShowForm(false)}
                     onSaved={(saved) => {
                         setShowForm(false);

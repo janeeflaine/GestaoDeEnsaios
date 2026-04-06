@@ -854,6 +854,8 @@ export default function App() {
                 events={events}
                 isGuest={isGuest}
                 userId={userProfile?.id}
+                userRole={userProfile?.role}
+                userName={userProfile?.name}
                 onGoToProfile={() => setActiveTab('profile')}
               />
             )

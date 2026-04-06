@@ -153,6 +153,7 @@ export interface EventStatistic {
   created_by?: string;
   created_at?: string;
   share_token?: string;
+  anciao_nome_custom?: string;
   // Cordas
   violino: number; viola: number; violoncelo: number;
   // Madeiras
@@ -168,6 +169,16 @@ export interface EventStatistic {
   musicos: number; organistas: number; anciaes_presentes: number; diaconos: number;
   coop_oficio: number; coop_jovens: number; enc_regionais_presentes: number;
   enc_locais: number; examinadoras: number; secretarios_musica: number; instrutores: number;
+}
+
+export interface PendingAnciao {
+  id: string;
+  name: string;
+  requested_by?: string;
+  requester_name?: string;
+  stat_id?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at?: string;
 }
 
 export interface OrchestraFamilyTotals {
