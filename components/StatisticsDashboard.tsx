@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X, Bell, CheckCircle, XCircle } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent, UserRole, PendingAnciao } from '../types';
+import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent, UserRole, PendingAnciao, PendingConductor } from '../types';
 import { fetchPendingAnciaes, approvePendingAnciao, rejectPendingAnciao } from '../services/anciaes';
+import { fetchPendingConductors, approvePendingConductor, rejectPendingConductor } from '../services/conductors';
 import { calcFamilyTotals, calcMinistryTotals } from '../utils/orchestraCalculations';
 import { generateStatisticsPDF, getStatisticsPdfDataUrl } from '../utils/pdfReport';
 import PdfPreviewModal from './modals/PdfPreviewModal';
@@ -50,6 +51,7 @@ export default function StatisticsDashboard({
         () => sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1'
     );
     const [pendingAnciaes, setPendingAnciaes] = useState<PendingAnciao[]>([]);
+    const [pendingConductors, setPendingConductors] = useState<PendingConductor[]>([]);
     const [showPendingModal, setShowPendingModal] = useState(false);
 
     const fetchData = async () => {
@@ -76,7 +78,11 @@ export default function StatisticsDashboard({
 
     const loadPending = useCallback(async () => {
         if (!isAdmin) return;
-        try { setPendingAnciaes(await fetchPendingAnciaes()); } catch { /* silent */ }
+        try {
+            const [anc, cond] = await Promise.all([fetchPendingAnciaes(), fetchPendingConductors()]);
+            setPendingAnciaes(anc);
+            setPendingConductors(cond);
+        } catch { /* silent */ }
     }, [isAdmin]);
 
     useEffect(() => { loadPending(); }, [loadPending]);
@@ -84,11 +90,22 @@ export default function StatisticsDashboard({
     const handleApprovePending = async (p: PendingAnciao) => {
         await approvePendingAnciao(p);
         await loadPending();
-        fetchData(); // refresh anciaes list
+        fetchData();
     };
 
     const handleRejectPending = async (id: string) => {
         await rejectPendingAnciao(id);
+        await loadPending();
+    };
+
+    const handleApprovePendingConductor = async (p: PendingConductor) => {
+        await approvePendingConductor(p);
+        await loadPending();
+        fetchData();
+    };
+
+    const handleRejectPendingConductor = async (id: string) => {
+        await rejectPendingConductor(id);
         await loadPending();
     };
 
@@ -237,15 +254,20 @@ export default function StatisticsDashboard({
                 </div>
             )}
 
-            {/* ── Admin: pending anciaes notification ─────────── */}
-            {isAdmin && pendingAnciaes.length > 0 && (
+            {/* ── Admin: pending notifications ─────────────────── */}
+            {isAdmin && (pendingAnciaes.length > 0 || pendingConductors.length > 0) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3">
                     <Bell size={20} className="text-blue-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-blue-800">
-                            {pendingAnciaes.length} solicitação{pendingAnciaes.length > 1 ? 'ões' : ''} de Ancião pendente{pendingAnciaes.length > 1 ? 's' : ''}
+                            {pendingAnciaes.length + pendingConductors.length} solicitaç{pendingAnciaes.length + pendingConductors.length > 1 ? 'ões' : 'ão'} pendente{pendingAnciaes.length + pendingConductors.length > 1 ? 's' : ''}
                         </p>
-                        <p className="text-xs text-blue-600 mt-0.5">Usuários adicionaram nomes de anciães não cadastrados.</p>
+                        <p className="text-xs text-blue-600 mt-0.5">
+                            {[
+                                pendingAnciaes.length > 0 && `${pendingAnciaes.length} ancião`,
+                                pendingConductors.length > 0 && `${pendingConductors.length} enc. regional`,
+                            ].filter(Boolean).join(' · ')}
+                        </p>
                     </div>
                     <button onClick={() => setShowPendingModal(true)}
                         className="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors flex-shrink-0">
@@ -418,42 +440,72 @@ export default function StatisticsDashboard({
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl border border-slate-100">
                         <div className="flex items-center justify-between mb-6">
-                            <h4 className="text-xl font-bold text-slate-800 tracking-tight">Solicitações de Ancião</h4>
+                            <h4 className="text-xl font-bold text-slate-800 tracking-tight">Solicitações Pendentes</h4>
                             <button onClick={() => setShowPendingModal(false)} className="bg-slate-100 p-2 rounded-xl hover:bg-slate-200 transition-colors">
                                 <X size={20} className="text-slate-500" />
                             </button>
                         </div>
-                        {pendingAnciaes.length === 0 ? (
+                        {pendingAnciaes.length === 0 && pendingConductors.length === 0 ? (
                             <p className="text-slate-500 text-center py-8">Nenhuma solicitação pendente.</p>
                         ) : (
-                            <div className="space-y-3 max-h-96 overflow-y-auto">
-                                {pendingAnciaes.map(p => (
-                                    <div key={p.id} className="bg-slate-50 rounded-2xl p-4 flex items-start gap-3 border border-slate-100">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-slate-800">IR. {p.name.toUpperCase()}</p>
-                                            {p.requester_name && (
-                                                <p className="text-xs text-slate-500 mt-0.5">
-                                                    Solicitado por: <span className="font-semibold text-slate-600">{p.requester_name}</span>
-                                                </p>
-                                            )}
-                                            <p className="text-xs text-slate-400 mt-0.5">
-                                                {p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}
-                                            </p>
-                                        </div>
-                                        <div className="flex gap-2 flex-shrink-0">
-                                            <button onClick={() => handleApprovePending(p)}
-                                                className="flex items-center gap-1 bg-green-50 text-green-700 font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
-                                                title="Aprovar e salvar no banco">
-                                                <CheckCircle size={14} /> Aprovar
-                                            </button>
-                                            <button onClick={() => handleRejectPending(p.id)}
-                                                className="flex items-center gap-1 bg-red-50 text-red-600 font-bold text-xs px-3 py-2 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
-                                                title="Rejeitar">
-                                                <XCircle size={14} /> Rejeitar
-                                            </button>
-                                        </div>
+                            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                                {pendingAnciaes.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Anciães</p>
+                                        {pendingAnciaes.map(p => (
+                                            <div key={p.id} className="bg-slate-50 rounded-2xl p-4 flex items-start gap-3 border border-slate-100">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-slate-800">IR. {p.name.toUpperCase()}</p>
+                                                    {p.requester_name && (
+                                                        <p className="text-xs text-slate-500 mt-0.5">Solicitado por: <span className="font-semibold text-slate-600">{p.requester_name}</span></p>
+                                                    )}
+                                                    <p className="text-xs text-slate-400 mt-0.5">{p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}</p>
+                                                </div>
+                                                <div className="flex gap-2 flex-shrink-0">
+                                                    <button onClick={() => handleApprovePending(p)}
+                                                        className="flex items-center gap-1 bg-green-50 text-green-700 font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                                                        title="Aprovar e salvar no banco">
+                                                        <CheckCircle size={14} /> Aprovar
+                                                    </button>
+                                                    <button onClick={() => handleRejectPending(p.id)}
+                                                        className="flex items-center gap-1 bg-red-50 text-red-600 font-bold text-xs px-3 py-2 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                                                        title="Rejeitar">
+                                                        <XCircle size={14} /> Rejeitar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
+                                {pendingConductors.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encarregados Regionais</p>
+                                        {pendingConductors.map(p => (
+                                            <div key={p.id} className="bg-slate-50 rounded-2xl p-4 flex items-start gap-3 border border-slate-100">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-slate-800">{p.name}</p>
+                                                    {p.congregation && <p className="text-xs text-slate-500 mt-0.5">{p.congregation}</p>}
+                                                    {p.requester_name && (
+                                                        <p className="text-xs text-slate-500 mt-0.5">Solicitado por: <span className="font-semibold text-slate-600">{p.requester_name}</span></p>
+                                                    )}
+                                                    <p className="text-xs text-slate-400 mt-0.5">{p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''}</p>
+                                                </div>
+                                                <div className="flex gap-2 flex-shrink-0">
+                                                    <button onClick={() => handleApprovePendingConductor(p)}
+                                                        className="flex items-center gap-1 bg-green-50 text-green-700 font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-100 transition-colors border border-green-200"
+                                                        title="Aprovar e salvar no banco">
+                                                        <CheckCircle size={14} /> Aprovar
+                                                    </button>
+                                                    <button onClick={() => handleRejectPendingConductor(p.id)}
+                                                        className="flex items-center gap-1 bg-red-50 text-red-600 font-bold text-xs px-3 py-2 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                                                        title="Rejeitar">
+                                                        <XCircle size={14} /> Rejeitar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

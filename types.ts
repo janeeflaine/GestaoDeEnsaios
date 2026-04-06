@@ -154,6 +154,7 @@ export interface EventStatistic {
   created_at?: string;
   share_token?: string;
   anciao_nome_custom?: string;
+  enc_regionais_nomes_custom?: string[];
   // Cordas
   violino: number; viola: number; violoncelo: number;
   // Madeiras
@@ -174,6 +175,17 @@ export interface EventStatistic {
 export interface PendingAnciao {
   id: string;
   name: string;
+  requested_by?: string;
+  requester_name?: string;
+  stat_id?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at?: string;
+}
+
+export interface PendingConductor {
+  id: string;
+  name: string;
+  congregation?: string;
   requested_by?: string;
   requester_name?: string;
   stat_id?: string;

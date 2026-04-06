@@ -101,17 +101,17 @@ function categoryCard(
     };
 }
 
-// ─── Donut chart via canvas polyline arcs ─────────────────────────────
-function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 110): PdfContent {
+// ─── Donut chart via canvas polyline arcs (returns canvas only) ───────
+function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 100): PdfContent {
     const cx = size / 2, cy = size / 2;
-    const outerR = size / 2 - 5, innerR = outerR * 0.55;
+    const outerR = size / 2 - 4, innerR = outerR * 0.5;
     const total = ft.total || 1;
 
     const segments = [
-        { value: ft.cordas, color: C.cordasAccent, label: String(ft.cordas) },
-        { value: ft.madeiras, color: C.madeirasAccent, label: String(ft.madeiras) },
-        { value: ft.metais, color: C.metaisAccent, label: String(ft.metais) },
-        { value: ft.acordeon, color: C.acordeonAccent, label: String(ft.acordeon) },
+        { value: ft.cordas, color: C.cordasAccent },
+        { value: ft.madeiras, color: C.madeirasAccent },
+        { value: ft.metais, color: C.metaisAccent },
+        { value: ft.acordeon, color: C.acordeonAccent },
     ];
 
     const shapes: PdfContent[] = [];
@@ -120,35 +120,76 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
     segments.forEach(seg => {
         if (seg.value <= 0) return;
         const sweep = (seg.value / total) * 2 * Math.PI;
-        const steps = Math.max(12, Math.round(sweep * 16));
+        const steps = Math.max(16, Math.round(sweep * 20));
         const points: { x: number; y: number }[] = [];
-
-        // Outer arc
         for (let i = 0; i <= steps; i++) {
             const a = startAngle + (sweep * i) / steps;
             points.push({ x: cx + outerR * Math.cos(a), y: cy + outerR * Math.sin(a) });
         }
-        // Inner arc (reversed)
         for (let i = steps; i >= 0; i--) {
             const a = startAngle + (sweep * i) / steps;
             points.push({ x: cx + innerR * Math.cos(a), y: cy + innerR * Math.sin(a) });
         }
-
         shapes.push({ type: 'polyline', points, closePath: true, color: seg.color });
-
-        // We can't easily add labels on canvas in pdfmake, so we skip text-on-canvas
-
         startAngle += sweep;
     });
 
-    // White center
+    // White center circle
     shapes.push({ type: 'ellipse', x: cx, y: cy, r1: innerR - 1, r2: innerR - 1, color: '#FFFFFF' });
+
+    return { canvas: shapes, width: size, height: size, alignment: 'center' };
+}
+
+// ─── Donut card with centered total and legend with values ─────────────
+function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }): PdfContent {
+    const size = 100;
+    // Pull the number+label stack up so it visually centers in the donut hole.
+    // After canvas (size=100), cursor is at bottom. Center is at 50.
+    // numBlock ≈ 20px (18pt) + 1 + 8px (6pt) = 29px → starts at 50-14 = 36
+    // pullUp = -(100-36) = -64, compensate bottom = 100-36-29 = 35
+    const pullUp = -64;
+    const compensate = 35;
+
+    const legendRow = (
+        leftColor: string, leftLabel: string, leftVal: number,
+        rightColor: string, rightLabel: string, rightVal: number,
+    ): PdfContent => ({
+        columns: [
+            {
+                width: '50%',
+                columns: [
+                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: leftColor }], width: 10 },
+                    { text: leftLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
+                    { text: String(leftVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
+                ],
+                margin: [0, 0, 6, 0],
+            },
+            {
+                width: '50%',
+                columns: [
+                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: rightColor }], width: 10 },
+                    { text: rightLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
+                    { text: String(rightVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
+                ],
+            },
+        ],
+    });
 
     return {
         stack: [
-            { canvas: shapes, width: size, height: size, alignment: 'center', margin: [15, 0, 0, 0] },
-            { text: String(ft.total), fontSize: 18, bold: true, color: C.textDark, alignment: 'center', margin: [0, -size / 2 - 8, 0, size / 2 - 14] },
-            { text: 'TOTAL', fontSize: 6, bold: true, color: C.labelColor, alignment: 'center', margin: [0, -4, 0, 6] },
+            { text: 'TOTAL DE MÚSICOS POR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 8] },
+            buildDonut(ft, size),
+            // Centered overlay: number + label as a single unit pulled into the donut hole
+            {
+                stack: [
+                    { text: String(ft.total), fontSize: 20, bold: true, color: C.textDark, alignment: 'center' },
+                    { text: 'TOTAL', fontSize: 5.5, bold: true, color: C.labelColor, alignment: 'center', margin: [0, 1, 0, 0] },
+                ],
+                margin: [0, pullUp, 0, compensate],
+            },
+            // Legend: 2 rows × 2 columns, each with color square | name | value
+            { ...legendRow(C.cordasAccent, 'Cordas', ft.cordas, C.madeirasAccent, 'Madeiras', ft.madeiras), margin: [8, 6, 8, 2] },
+            { ...legendRow(C.metaisAccent, 'Metais', ft.metais, C.acordeonAccent, 'Acordeon', ft.acordeon), margin: [8, 0, 8, 8] },
         ],
     };
 }
@@ -248,7 +289,7 @@ function buildStatisticsDocDef(
     }));
 
     // ─── Donut content ────────────────────────────────────────────────
-    const donutContent = buildDonut(ft);
+    const donutContent = buildDonutCard(ft);
 
     // ═══════════════════════════════════════════════════════════════════
     // DOCUMENT
@@ -308,7 +349,7 @@ function buildStatisticsDocDef(
                             widths: ['*'], body: [[{
                                 stack: [
                                     { text: 'ANCIÃO:', fontSize: 6, bold: true, color: C.labelColor, margin: [0, 0, 0, 1] },
-                                    { text: `IR. ${(anciao?.name || '').toUpperCase()}`, fontSize: 8, bold: true, color: C.textDark },
+                                    { text: `IR. ${(anciao?.name || stat.anciao_nome_custom || '').toUpperCase()}`, fontSize: 8, bold: true, color: C.textDark },
                                 ],
                                 fillColor: C.cardBg, margin: [8, 8, 8, 8],
                             }]]
@@ -459,29 +500,7 @@ function buildStatisticsDocDef(
                                         width: '50%',
                                         table: {
                                             widths: ['*'], body: [[{
-                                                stack: [
-                                                    { text: 'TOTAL DE MÚSICOS\nPOR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
-                                                    donutContent,
-                                                    // Legend grid
-                                                    {
-                                                        columns: [
-                                                            { canvas: [{ type: 'rect', x: 0, y: 1, w: 7, h: 7, color: C.cordasAccent }], width: 9 },
-                                                            { text: 'Cordas', fontSize: 6, width: 28, margin: [1, 0, 0, 0] },
-                                                            { canvas: [{ type: 'rect', x: 0, y: 1, w: 7, h: 7, color: C.madeirasAccent }], width: 9 },
-                                                            { text: 'Madeiras', fontSize: 6, width: 28, margin: [1, 0, 0, 0] },
-                                                        ],
-                                                        margin: [6, 4, 0, 2],
-                                                    },
-                                                    {
-                                                        columns: [
-                                                            { canvas: [{ type: 'rect', x: 0, y: 1, w: 7, h: 7, color: C.metaisAccent }], width: 9 },
-                                                            { text: 'Metais', fontSize: 6, width: 28, margin: [1, 0, 0, 0] },
-                                                            { canvas: [{ type: 'rect', x: 0, y: 1, w: 7, h: 7, color: C.acordeonAccent }], width: 9 },
-                                                            { text: 'Acordeon', fontSize: 6, width: 28, margin: [1, 0, 0, 0] },
-                                                        ],
-                                                        margin: [6, 0, 0, 6],
-                                                    },
-                                                ],
+                                                ...donutContent,
                                                 fillColor: C.cardBg,
                                             }]]
                                         },

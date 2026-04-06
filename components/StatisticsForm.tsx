@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash, UserCheck } from 'lucide-react';
 import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent, UserRole } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals, emptyStatistic } from '../utils/orchestraCalculations';
 import { supabase } from '../supabaseClient';
 import { insertStatistic, updateStatistic } from '../services/statistics';
 import { submitPendingAnciao } from '../services/anciaes';
+import { submitPendingConductor } from '../services/conductors';
 
 interface StatisticsFormProps {
     congregations: Congregation[];
@@ -50,6 +51,19 @@ export default function StatisticsForm({
         return [];
     });
     const [hinoInput, setHinoInput] = useState('');
+    const hinoInputRef = useRef<HTMLInputElement>(null);
+    // Custom enc. regionais for non-admin (local only)
+    const [customEncList, setCustomEncList] = useState<{ name: string; congregation: string }[]>(
+        () => {
+            if (editingStat?.enc_regionais_nomes_custom) {
+                return editingStat.enc_regionais_nomes_custom.map(entry => {
+                    const match = entry.match(/^(.+?)\s*\((.+)\)$/);
+                    return match ? { name: match[1], congregation: match[2] } : { name: entry, congregation: '' };
+                });
+            }
+            return [];
+        }
+    );
 
     const familyTotals = useMemo(() => calcFamilyTotals(stat), [stat]);
     const familyPct = useMemo(() => calcFamilyPercentages(familyTotals), [familyTotals]);
@@ -67,11 +81,12 @@ export default function StatisticsForm({
     const addHino = () => {
         const n = parseInt(hinoInput.trim());
         if (!n || n <= 0) return;
-        if (hinosEnsaiadosList.includes(n)) { setHinoInput(''); return; }
+        if (hinosEnsaiadosList.includes(n)) { setHinoInput(''); hinoInputRef.current?.focus(); return; }
         const next = [...hinosEnsaiadosList, n].sort((a, b) => a - b);
         setHinosEnsaiadosList(next);
         setStat(prev => ({ ...prev, hinos_ensaiados: next.length }));
         setHinoInput('');
+        hinoInputRef.current?.focus();
     };
 
     const removeHino = (n: number) => {
@@ -90,8 +105,15 @@ export default function StatisticsForm({
     const handleSave = async () => {
         setSaving(true);
         try {
-            // Merge custom ancião name into payload
-            const base = { ...statWithMusicos, anciao_nome_custom: customAnciaoName || undefined };
+            // Merge custom names into payload
+            const encNomesCustom = customEncList.length > 0
+                ? customEncList.map(e => e.congregation ? `${e.name} (${e.congregation})` : e.name)
+                : undefined;
+            const base = {
+                ...statWithMusicos,
+                anciao_nome_custom: customAnciaoName || undefined,
+                enc_regionais_nomes_custom: encNomesCustom,
+            };
 
             // ── Guest mode: pass stat back to parent for sessionStorage ──
             if (isGuest) {
@@ -116,6 +138,12 @@ export default function StatisticsForm({
                 // If custom ancião was used by non-admin, submit notification to admins
                 if (customAnciaoName && !isAdmin) {
                     await submitPendingAnciao(customAnciaoName, userId, userName, saved.id);
+                }
+                // If custom enc. regionais were used by non-admin, submit notifications
+                if (customEncList.length > 0 && !isAdmin) {
+                    for (const enc of customEncList) {
+                        await submitPendingConductor(enc.name, enc.congregation, userId, userName, saved.id);
+                    }
                 }
                 onSaved();
             }
@@ -156,10 +184,20 @@ export default function StatisticsForm({
     const handleAddEnc = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
-        const { error } = await supabase.from('conductors').insert({
-            id: crypto.randomUUID(), name: fd.get('name') as string, congregation: fd.get('congregation') as string, type: 'Regional'
-        });
-        if (!error) { setShowEncModal(false); onSaved(undefined); }
+        const name = (fd.get('name') as string).trim();
+        const congregation = (fd.get('congregation') as string).trim();
+
+        if (isAdmin) {
+            // Admin: save directly to DB
+            const { error } = await supabase.from('conductors').insert({
+                id: crypto.randomUUID(), name, congregation, type: 'Regional',
+            });
+            if (!error) { setShowEncModal(false); onSaved(undefined); }
+        } else {
+            // Non-admin: use locally only, will submit pending after save
+            setCustomEncList(prev => [...prev, { name, congregation }]);
+            setShowEncModal(false);
+        }
     };
 
     const inputClass = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-lg text-center shadow-sm";
@@ -276,6 +314,7 @@ export default function StatisticsForm({
                                 </label>
                                 <div className="flex gap-2">
                                     <input
+                                        ref={hinoInputRef}
                                         type="number" min="1" placeholder="Nº do hino..."
                                         value={hinoInput}
                                         onChange={e => setHinoInput(e.target.value)}
@@ -337,7 +376,7 @@ export default function StatisticsForm({
                             </div>
 
                             {/* Selected Pills */}
-                            {selectedEncRegionais.length > 0 && (
+                            {(selectedEncRegionais.length > 0 || customEncList.length > 0) && (
                                 <div className="flex flex-wrap gap-2 pt-2">
                                     {selectedEncRegionais.map(id => {
                                         const enc = encRegionais.find(e => e.id === id);
@@ -349,8 +388,18 @@ export default function StatisticsForm({
                                                     <X size={14} />
                                                 </button>
                                             </div>
-                                        )
+                                        );
                                     })}
+                                    {customEncList.map((enc, idx) => (
+                                        <div key={`custom-${idx}`} className="flex items-center gap-1.5 bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg text-sm font-semibold border border-amber-300 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                            <UserCheck size={13} className="text-amber-600 flex-shrink-0" />
+                                            <span>{enc.name}{enc.congregation ? ` (${enc.congregation})` : ''}</span>
+                                            <span className="text-[9px] bg-amber-200 text-amber-700 font-black px-1.5 py-0.5 rounded-full">Não cadastrado</span>
+                                            <button type="button" onClick={() => setCustomEncList(prev => prev.filter((_, i) => i !== idx))} className="text-amber-500 hover:text-amber-900 bg-white/50 hover:bg-white rounded-full p-0.5 transition-colors" title="Remover">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -493,13 +542,32 @@ export default function StatisticsForm({
             {showEncModal && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl border border-slate-100">
-                        <h4 className="text-xl font-bold text-slate-800 mb-6 tracking-tight">Cadastrar Enc. Regional</h4>
-                        <form onSubmit={handleAddEnc} className="space-y-5">
-                            <input name="name" required placeholder="Nome" className={inputClass + ' text-left'} />
-                            <input name="congregation" placeholder="Região / Congregação Principal (Ex: São Paulo/SP)" required className={inputClass + ' text-left'} />
+                        <h4 className="text-xl font-bold text-slate-800 mb-2 tracking-tight">
+                            {isAdmin ? 'Cadastrar Enc. Regional' : 'Adicionar Enc. Regional'}
+                        </h4>
+                        {!isAdmin && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-5">
+                                <p className="text-xs text-amber-700 font-semibold">
+                                    Como você não é administrador, este nome será usado apenas neste cadastro.
+                                    Um aviso será enviado ao admin para aprovação no banco de dados.
+                                </p>
+                            </div>
+                        )}
+                        <form onSubmit={handleAddEnc} className="space-y-5 mt-4">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome <span className="text-red-500">*</span></label>
+                                <input name="name" required placeholder="Nome completo" className={inputClass + ' text-left'} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Região / Congregação</label>
+                                <input name="congregation" placeholder="Ex: São Paulo/SP" className={inputClass + ' text-left'} />
+                            </div>
                             <div className="flex gap-3">
                                 <button type="button" onClick={() => setShowEncModal(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
-                                <button type="submit" className="flex-1 py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
+                                <button type="submit"
+                                    className={`flex-1 py-3.5 rounded-2xl font-bold transition-colors shadow-lg ${isAdmin ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200' : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200'}`}>
+                                    {isAdmin ? 'Salvar no Banco' : 'Usar neste Cadastro'}
+                                </button>
                             </div>
                         </form>
                     </div>
