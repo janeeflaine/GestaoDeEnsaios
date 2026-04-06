@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ccb-gold: #d4bc8d;
+  --color-ccb-blue-dark: #1e293b;
+  --color-ccb-blue-light: #1e3a8a;
+  --color-ccb-green: #14532d;
+  --color-ccb-gray: #9ca3af;
+}
+
+@layer utilities {
+  .a4-page {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 auto;
+    background-color: #f9fafb;
+    position: relative;
+    overflow: hidden;
+    padding: 10mm;
+    box-sizing: border-box;
+    background-image: radial-gradient(#d1d5db 0.5px, transparent 0.5px);
+    background-size: 10px 10px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white;
+  }
+  .a4-page {
+    margin: 0;
+    box-shadow: none;
+    background-image: none; /* Optional: remove dots for print if desired, but usually kept if part of design */
+  }
+}

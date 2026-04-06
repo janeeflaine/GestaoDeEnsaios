@@ -1,8 +1,17 @@
 import React, { forwardRef } from 'react';
 import { BookOpen, Mic, PenLine, Users } from 'lucide-react';
-import { PieChart, Pie, Cell } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_FIELDS } from '../types';
 import { calcFamilyTotals, calcMinistryTotals } from '../utils/orchestraCalculations';
+
+/* ─── Color tokens (from original PDF/app/globals.css) ─── */
+const CCB = {
+    gold: '#d4bc8d',
+    blueDark: '#1e293b',
+    blueLight: '#1e3a8a',
+    green: '#14532d',
+    gray: '#9ca3af',
+};
 
 interface PdfExportTemplateProps {
     stat: EventStatistic;
@@ -14,279 +23,310 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
     const ft = calcFamilyTotals(stat);
     const mt = calcMinistryTotals(stat);
 
+    /* ── date ── */
     const eventDate = new Date(stat.event_date + 'T00:00:00');
     const day = String(eventDate.getDate()).padStart(2, '0');
     const month = eventDate.toLocaleDateString('pt-BR', { month: 'long' });
     const year = eventDate.getFullYear();
-    const eventDateFormatted = `${day} DE ${month.toUpperCase()} DE ${year} - (Estatística Extraoficial)`.toUpperCase();
+    const eventDateFormatted = `${day} DE ${month.toUpperCase()} DE ${year} - (Estatística Extraoficial)`;
 
+    /* ── percentages ── */
     const totalInstruments = ft.total || 1;
     const cordasPct = Math.round((ft.cordas / totalInstruments) * 100);
     const madeirasPct = Math.round((ft.madeiras / totalInstruments) * 100);
     const metaisPct = Math.round((ft.metais / totalInstruments) * 100);
     const acordeonPct = Math.round((ft.acordeon / totalInstruments) * 100);
 
-    const allInstKeys = [...STAT_INSTRUMENTS.cordas, ...STAT_INSTRUMENTS.madeiras, ...STAT_INSTRUMENTS.metais, ...STAT_INSTRUMENTS.acordeon];
-    const maxInstCount = Math.max(1, ...allInstKeys.map(i => Number((stat as any)[i.key]) || 0));
-
+    /* ── build table rows exactly like original ── */
     type RowData = { name: string; count: number | null; isHeader: boolean; bg: string; text?: string; barColor: string };
     const tableRows: RowData[] = [];
 
-    const addFamily = (label: string, total: number, bg: string, barColor: string, text: string, instruments: readonly { key: string; label: string }[]) => {
-        tableRows.push({ name: label, count: total, isHeader: true, bg, text, barColor: '' });
-        instruments.forEach((inst) => {
-            const count = Number((stat as any)[inst.key]) || 0;
-            tableRows.push({ name: inst.label, count, isHeader: false, bg: 'bg-white', barColor });
+    const addFamily = (label: string, color: string, instruments: readonly { key: string; label: string }[]) => {
+        tableRows.push({ name: label, count: null, isHeader: true, bg: color, text: 'white', barColor: '' });
+        instruments.forEach((inst, i) => {
+            const count = Number((stat[inst.key as keyof EventStatistic] as number)) || 0;
+            tableRows.push({ name: inst.label, count, isHeader: false, bg: i % 2 === 0 ? '#ffffff' : '#f9fafb', barColor: color });
         });
     };
 
-    const colorCordas = '#c5a871';
-    const colorMadeiras = '#132863';
-    const colorMetais = '#135c2f';
-    const colorAcordeon = '#8f1518';
+    addFamily('CORDAS', CCB.gold, STAT_INSTRUMENTS.cordas);
+    addFamily('MADEIRAS', CCB.blueLight, STAT_INSTRUMENTS.madeiras);
+    addFamily('METAIS', CCB.green, STAT_INSTRUMENTS.metais);
+    addFamily('ACORDEON', '#7f1d1d', STAT_INSTRUMENTS.acordeon);
 
-    addFamily('CORDAS', ft.cordas, 'bg-[#c5a871]', 'bg-[#c5a871]', 'text-white', STAT_INSTRUMENTS.cordas);
-    addFamily('MADEIRAS', ft.madeiras, 'bg-[#132863]', 'bg-[#132863]', 'text-white', STAT_INSTRUMENTS.madeiras);
-    addFamily('METAIS', ft.metais, 'bg-[#135c2f]', 'bg-[#135c2f]', 'text-white', STAT_INSTRUMENTS.metais);
-    addFamily('ACORDEON', ft.acordeon, 'bg-[#8f1518]', 'bg-[#8f1518]', 'text-white', STAT_INSTRUMENTS.acordeon);
+    /* ── max for bar width ── */
+    const allInstKeys = [...STAT_INSTRUMENTS.cordas, ...STAT_INSTRUMENTS.madeiras, ...STAT_INSTRUMENTS.metais, ...STAT_INSTRUMENTS.acordeon];
+    const maxInstCount = Math.max(1, ...allInstKeys.map(i => Number(stat[i.key as keyof EventStatistic]) || 0));
 
     const encRegional = stat.enc_regionais && stat.enc_regionais.length > 0 ? stat.enc_regionais[0] : null;
 
     const donutData = [
-        { name: 'CORDAS', value: ft.cordas, fill: colorCordas },
-        { name: 'MADEIRAS', value: ft.madeiras, fill: colorMadeiras },
-        { name: 'METAIS', value: ft.metais, fill: colorMetais },
-        { name: 'ACORDEON', value: ft.acordeon, fill: colorAcordeon },
+        { name: 'CORDAS', value: ft.cordas, fill: CCB.gold },
+        { name: 'MADEIRAS', value: ft.madeiras, fill: CCB.blueLight },
+        { name: 'METAIS', value: ft.metais, fill: CCB.green },
+        { name: 'ACORDEON', value: ft.acordeon, fill: CCB.gray },
     ].filter(d => d.value > 0);
 
     const ministryItems = MINISTRY_FIELDS.map(f => ({
         name: f.label.replace('Presentes', '').replace('Música', 'da Música').trim(),
-        value: Number((stat as any)[f.key]) || 0,
+        value: Number(stat[f.key as keyof EventStatistic]) || 0,
     }));
 
+    /*
+     * ──────────────────────────────────────────────────────
+     * RENDER — This is an EXACT copy of PDF/app/page.tsx
+     * with static data replaced by dynamic props.
+     * ──────────────────────────────────────────────────────
+     */
     return (
         <div className="fixed left-[-9999px] top-[-9999px] overflow-hidden bg-white" style={{ zIndex: -9999 }}>
             <div
                 ref={ref}
                 id="pdf-export-template"
-                className="a4-page relative"
-                style={{ width: '794px', height: '1123px', padding: '32px 34px', boxSizing: 'border-box', backgroundColor: 'white', overflow: 'hidden' }}
+                style={{
+                    width: '210mm',
+                    height: '297mm',
+                    margin: '0 auto',
+                    backgroundColor: '#f9fafb',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    padding: '10mm',
+                    boxSizing: 'border-box',
+                    backgroundImage: 'radial-gradient(#d1d5db 0.5px, transparent 0.5px)',
+                    backgroundSize: '10px 10px',
+                }}
+                className="flex flex-col gap-4"
             >
-                {/* Dotted background */}
-                <div
-                    className="absolute inset-0 z-0 opacity-40 pointer-events-none"
-                    style={{ backgroundImage: 'radial-gradient(#94a3b8 1.5px, transparent 1.5px)', backgroundSize: '24px 24px' }}
-                />
 
-                {/* Content */}
-                <div className="relative z-10 w-full h-full flex flex-col" style={{ gap: '10px' }}>
+                {/* Header */}
+                <header className="text-center py-3 bg-white/80 rounded-xl shadow-sm border border-gray-100">
+                    <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">CONGREGAÇÃO CRISTÃ NO BRASIL</h1>
+                    <p className="text-xs font-semibold text-gray-600 mt-1">{congregation?.name || ''} - {congregation?.city || ''} / {congregation?.state || ''}</p>
+                    <p className="text-xs font-bold text-gray-700">ESTATÍSTICA - ENSAIO REGIONAL</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{eventDateFormatted}</p>
+                </header>
 
-                    {/* ── Header ── */}
-                    <header className="text-center py-2.5 bg-white/95 rounded-2xl shadow-sm border border-gray-100 shrink-0">
-                        <h1 className="text-[24px] font-black tracking-tight leading-none" style={{ color: '#272f3d' }}>CONGREGAÇÃO CRISTÃ NO BRASIL</h1>
-                        <p className="text-[11px] font-bold text-gray-600 mt-1 uppercase">{congregation?.name || ''} - {congregation?.city || ''} / {congregation?.state || ''}</p>
-                        <p className="text-[9px] font-bold text-gray-500 uppercase mt-0.5">ESTATÍSTICA - ENSAIO REGIONAL</p>
-                        <p className="text-[8px] uppercase font-bold text-gray-400 mt-0.5">{eventDateFormatted}</p>
-                    </header>
-
-                    {/* ── Presidency Pills ── */}
-                    <section className="grid grid-cols-3 gap-2 shrink-0">
-                        {[
-                            { icon: <Mic className="w-3.5 h-3.5 text-gray-600" />, l1: `Ancião: Ir. ${anciao?.name || ''}`, l2: `LOCALIDADE: ${congregation?.city} - ${congregation?.state}` },
-                            { icon: <BookOpen className="w-3.5 h-3.5 text-gray-600" />, l1: 'Palavra:', l2: (stat.palavra || '') },
-                            { icon: <PenLine className="w-3.5 h-3.5 text-gray-600" />, l1: `Enc. Reg.: Ir. ${encRegional?.name || '-'}`, l2: `LOCALIDADE: ${encRegional?.city ? `${encRegional.city} - ${encRegional.state}` : '-'}` },
-                        ].map((p, i) => (
-                            <div key={i} className="bg-white rounded-full py-1 px-2 shadow-sm border border-gray-200 flex items-center gap-1.5">
-                                <div className="p-1.5 bg-gray-50 rounded-full border border-gray-200 shrink-0">{p.icon}</div>
-                                <div className="flex flex-col overflow-hidden">
-                                    <p className="text-[8px] font-black text-gray-600 uppercase truncate">{p.l1}</p>
-                                    <p className="text-[7px] font-bold text-gray-400 uppercase truncate">{p.l2}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </section>
-
-                    {/* ── Hinos ── */}
-                    <section className="flex gap-2 shrink-0">
-                        <div className="flex items-stretch bg-white rounded-lg overflow-hidden w-56 shadow-sm border border-gray-200">
-                            <div className="bg-gray-200 px-2.5 py-1.5 flex items-center border-r border-gray-200">
-                                <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Hino Abertura</span>
-                            </div>
-                            <div className="flex-1 flex items-center justify-center">
-                                <span className="text-lg font-black text-gray-900">{stat.hino_abertura || ''}</span>
-                            </div>
+                {/* Presidency Section */}
+                <section className="grid grid-cols-3 gap-3">
+                    <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3" style={{ borderLeft: '4px solid #9ca3af' }}>
+                        <div className="p-2 bg-gray-100 rounded-lg"><Mic className="w-5 h-5 text-gray-700" /></div>
+                        <div>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Ancião: Ir. {anciao?.name || ''}</p>
+                            <p className="text-[8px] text-gray-400">LOCALIDADE: {congregation?.city} - {congregation?.state}</p>
                         </div>
-                        <div className="flex items-stretch bg-white rounded-lg overflow-hidden flex-1 shadow-sm border border-gray-200">
-                            <div className="bg-gray-200 px-2.5 py-1.5 flex items-center border-r border-gray-200">
-                                <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Hinos Ensaiados</span>
-                            </div>
-                            <div className="flex-1 flex items-center justify-center">
-                                <span className="text-lg font-black text-gray-900">{stat.hinos_ensaiados || ''}</span>
-                            </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3" style={{ borderLeft: '4px solid #9ca3af' }}>
+                        <div className="p-2 bg-gray-100 rounded-lg"><BookOpen className="w-5 h-5 text-gray-700" /></div>
+                        <div>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Palavra:</p>
+                            <p className="text-[10px] font-extrabold text-gray-800">{stat.palavra || ''}</p>
                         </div>
-                    </section>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3" style={{ borderLeft: '4px solid #9ca3af' }}>
+                        <div className="p-2 bg-gray-100 rounded-lg"><PenLine className="w-5 h-5 text-gray-700" /></div>
+                        <div>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Enc. Reg.: Ir. {encRegional?.name || '-'}</p>
+                            <p className="text-[8px] text-gray-400">LOCALIDADE: {encRegional?.city ? `${encRegional.city} - ${encRegional.state}` : '-'}</p>
+                        </div>
+                    </div>
+                </section>
 
-                    {/* ── Two-Column Body ── */}
-                    <div className="flex gap-3 flex-1 overflow-hidden min-h-0">
+                {/* Hinos Section */}
+                <section className="flex gap-4">
+                    <div className="flex items-center bg-gray-200 rounded-lg overflow-hidden w-64 shadow-sm">
+                        <span className="bg-gray-300 text-[9px] font-bold px-3 py-2 text-gray-700 uppercase">Hino Abertura</span>
+                        <span className="flex-1 bg-white text-lg font-bold text-center py-1">{stat.hino_abertura || ''}</span>
+                    </div>
+                    <div className="flex items-center bg-gray-200 rounded-lg overflow-hidden flex-1 shadow-sm">
+                        <span className="bg-gray-300 text-[9px] font-bold px-3 py-2 text-gray-700 uppercase">Hinos Ensaiados</span>
+                        <span className="flex-1 bg-white text-lg font-bold text-center py-1">{stat.hinos_ensaiados || ''}</span>
+                    </div>
+                </section>
 
-                        {/* LEFT – instrument list */}
-                        <aside className="w-[42%] flex flex-col min-h-0">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+                {/* Two Column Content */}
+                <div className="flex gap-4 flex-1 overflow-hidden">
+
+                    {/* Left Column (Instrument List) */}
+                    <aside className="w-2/5 flex flex-col gap-3">
+                        <div className="flex flex-col flex-1 min-h-0">
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
                                 <div className="bg-gray-100 text-center py-2 border-b border-gray-300 shrink-0">
-                                    <h2 className="text-[11px] font-black text-gray-700 uppercase tracking-wide">VISÃO GERAL DA ORQUESTRA</h2>
+                                    <h2 className="text-[11px] font-black text-gray-800 uppercase leading-tight">VISÃO GERAL DA ORQUESTRA</h2>
                                 </div>
-                                <div className="flex-1 pt-0.5 px-1 flex flex-col gap-0 overflow-hidden">
+                                <div className="flex-1 overflow-y-auto text-[9px]">
                                     {tableRows.map((row, idx) => {
                                         if (row.isHeader) {
                                             return (
-                                                <div key={`h-${idx}`} className={`${row.bg} ${row.text} font-black px-2 py-[1.5px] uppercase mt-[3px]`} style={{ fontSize: '8px', letterSpacing: '0.05em' }}>
+                                                <div key={idx} className="font-bold px-2 py-0.5 uppercase border-b border-gray-300 text-[9px]" style={{ backgroundColor: row.bg, color: row.text }}>
                                                     {row.name}
                                                 </div>
                                             );
                                         }
-                                        const pct = row.count && row.count > 0 ? Math.max((row.count / maxInstCount) * 100, 3) : 0;
                                         return (
-                                            <div key={`r-${idx}`} className="flex items-center px-1 py-[1px]">
-                                                <div className="shrink-0 truncate font-semibold text-gray-700 uppercase" style={{ fontSize: '7.5px', width: '38%' }}>{row.name}</div>
-                                                {/* bar container with overflow hidden so it never bleeds */}
-                                                <div className="overflow-hidden flex items-center" style={{ width: '47%', height: '7px' }}>
-                                                    {pct > 0 && <div className={row.barColor} style={{ height: '7px', width: `${pct}%`, minWidth: '2px' }} />}
-                                                    {row.count === 0 && <div className="bg-red-600" style={{ height: '7px', width: '2px' }} />}
+                                            <div key={idx} className="flex items-center px-2 py-[3px] border-b border-gray-100" style={{ backgroundColor: row.bg }}>
+                                                <div className="w-[45%] truncate font-medium text-gray-800">{row.name}</div>
+                                                <div className="w-[40%] flex items-center h-full overflow-hidden">
+                                                    {row.count !== null && row.count > 0 && (
+                                                        <div
+                                                            className="h-2.5 border shadow-sm"
+                                                            style={{
+                                                                backgroundColor: row.barColor,
+                                                                borderColor: 'rgba(0,0,0,0.2)',
+                                                                width: `${Math.max((row.count / maxInstCount) * 100, 2)}%`,
+                                                            }}
+                                                        />
+                                                    )}
+                                                    {row.count === 0 && <div className="h-2.5 w-0.5 bg-red-600" />}
                                                 </div>
-                                                <div className="text-right font-bold text-gray-600" style={{ fontSize: '8.5px', width: '15%' }}>
-                                                    {row.count ? row.count : ''}
-                                                </div>
+                                                <div className="w-[15%] text-right font-medium text-gray-800">{row.count}</div>
                                             </div>
                                         );
                                     })}
                                 </div>
                             </div>
-                        </aside>
+                        </div>
+                    </aside>
 
-                        {/* RIGHT – dashboard */}
-                        <main className="w-[58%] flex flex-col min-h-0" style={{ gap: '8px' }}>
-                            <h2 className="text-[9px] font-black text-gray-800 uppercase tracking-widest text-center flex justify-center items-center gap-3 shrink-0">
-                                <span className="h-px bg-gray-300 flex-1" />DASHBOARD DE ANÁLISE<span className="h-px bg-gray-300 flex-1" />
-                            </h2>
+                    {/* Right Column (Dashboard) */}
+                    <main className="w-3/5 flex flex-col gap-4">
+                        <h2 className="text-[10px] font-black text-gray-700 uppercase border-b-2 border-gray-300 pb-1 text-center">Dashboard de Análise</h2>
 
-                            {/* 4 family cards */}
-                            <div className="grid grid-cols-2 gap-2 shrink-0">
-                                {[
-                                    { title: 'CORDAS', color: colorCordas, pct: cordasPct, total: ft.cordas, ideal: '50%' },
-                                    { title: 'MADEIRAS', color: colorMadeiras, pct: madeirasPct, total: ft.madeiras, ideal: '25%' },
-                                    { title: 'METAIS', color: colorMetais, pct: metaisPct, total: ft.metais, ideal: '25%' },
-                                    { title: 'ACORDEON', color: colorAcordeon, pct: acordeonPct, total: ft.acordeon, ideal: '-' }
-                                ].map(c => (
-                                    <div key={c.title} className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200 flex flex-col justify-between" style={{ minHeight: '72px' }}>
-                                        <div className="flex justify-between">
-                                            <div className="flex flex-col">
-                                                <span className="font-black tracking-widest uppercase" style={{ fontSize: '8px', color: c.color }}>{c.title}</span>
-                                                <span className="font-bold text-gray-400 uppercase" style={{ fontSize: '7px' }}>Total</span>
-                                                <span className="font-black text-gray-900 leading-none tracking-tight" style={{ fontSize: '24px' }}>{c.total}</span>
-                                            </div>
-                                            <div className="flex flex-col items-end">
-                                                <span className="font-black text-gray-800 leading-none" style={{ fontSize: '20px' }}>{c.pct > 0 || c.title !== 'ACORDEON' ? `${c.pct}%` : '-'}</span>
-                                                <span className="font-bold text-gray-400 uppercase mt-0.5" style={{ fontSize: '7px' }}>Ideal: {c.ideal}</span>
-                                            </div>
+                        {/* Dashboard Grid (4 Cards) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { title: 'CORDAS', color: CCB.gold, textColor: '#6b7280', pct: cordasPct, total: ft.cordas, ideal: '50%' },
+                                { title: 'MADEIRAS', color: CCB.blueLight, textColor: CCB.blueLight, pct: madeirasPct, total: ft.madeiras, ideal: '25%' },
+                                { title: 'METAIS', color: CCB.green, textColor: CCB.green, pct: metaisPct, total: ft.metais, ideal: '25%' },
+                                { title: 'ACORDEON', color: CCB.gray, textColor: CCB.gray, pct: acordeonPct, total: ft.acordeon, ideal: '-' },
+                            ].map(c => (
+                                <div key={c.title} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 relative overflow-hidden" style={{ borderTop: `4px solid ${c.color}` }}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-[9px] font-black" style={{ color: c.textColor }}>{c.title}</p>
+                                            <p className="text-[7px] text-gray-400 mt-1">Total</p>
+                                            <p className="text-2xl font-black text-gray-800 leading-none">{c.total}</p>
                                         </div>
-                                        <div className="w-full bg-gray-100 rounded-full overflow-hidden mt-1" style={{ height: '6px' }}>
-                                            <div className="h-full rounded-full" style={{ width: `${Math.min(c.pct, 100)}%`, backgroundColor: c.color }} />
+                                        <div className="text-right">
+                                            <p className="text-xl font-black text-gray-800">{c.pct > 0 || c.title !== 'ACORDEON' ? `${c.pct}%` : '-'}</p>
+                                            <p className="text-[7px] font-bold text-gray-400">Ideal: {c.ideal}</p>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+                                        <div className="h-1.5 rounded-full" style={{ width: `${Math.min(c.pct, 100)}%`, backgroundColor: c.color }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
-                            {/* Donut + Personnel */}
-                            <div className="flex gap-2 flex-1 min-h-0 overflow-hidden">
-                                {/* Donut */}
-                                <div className="bg-white rounded-xl px-1.5 py-2 shadow-sm border border-gray-200 flex flex-col items-center w-[38%]">
-                                    <h3 className="font-black text-gray-500 uppercase text-center tracking-widest" style={{ fontSize: '7.5px' }}>TOTAL DE MÚSICOS<br />POR CATEGORIA</h3>
-                                    <div className="flex-1 w-full relative flex items-center justify-center">
-                                        <PieChart width={110} height={110}>
-                                            <Pie data={donutData} cx={55} cy={55} innerRadius={34} outerRadius={50} stroke="none" dataKey="value" isAnimationActive={false}>
-                                                {donutData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                        {/* Charts Container */}
+                        <div className="flex-1 min-h-0 flex flex-col">
+                            {/* Pessoal Adicional Cards */}
+                            <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-0">
+                                <p className="text-[9px] font-black text-gray-600 mb-1 text-center uppercase">Pessoal Adicional</p>
+
+                                <div className="flex flex-col gap-1.5 flex-1 justify-center min-h-0">
+                                    {/* Top Row: Músicos & Organistas */}
+                                    <div className="flex gap-1.5">
+                                        <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm">
+                                            <p className="text-[8px] font-bold text-gray-700 uppercase">Músicos</p>
+                                            <p className="text-lg font-black text-gray-900 leading-none mt-0.5">{stat.musicos || 0}</p>
+                                        </div>
+                                        <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm">
+                                            <p className="text-[8px] font-bold text-gray-700 uppercase">Organistas</p>
+                                            <p className="text-lg font-black text-gray-900 leading-none mt-0.5">{stat.organistas || 0}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Middle Row: Total */}
+                                    <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1.5 text-center border border-gray-200 shadow-sm flex items-center justify-center gap-2">
+                                        <Users className="w-4 h-4 text-gray-500" />
+                                        <div>
+                                            <p className="text-[9px] font-bold text-gray-700 uppercase">Músicos + Organistas</p>
+                                            <p className="text-xl font-black text-gray-900 leading-none mt-0.5">{mt.musicosOrganistas}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Grid of ministry items */}
+                                    <div className="grid grid-cols-3 gap-1.5 mt-0.5">
+                                        {ministryItems.map((item, idx) => (
+                                            <div key={idx} className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm flex flex-col justify-center">
+                                                <p className="text-[7px] font-bold text-gray-700 leading-tight h-5 flex items-center justify-center">{item.name}</p>
+                                                <p className="text-base font-black text-gray-900 leading-none">{item.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom Section: Donut Chart + Totals */}
+                        <div className="flex gap-3 mt-auto">
+                            {/* Category Donut */}
+                            <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-100 flex flex-col items-center relative w-[45%]">
+                                <p className="text-[8px] font-black text-gray-600 mb-0.5 text-center leading-tight">TOTAL DE MÚSICOS<br />POR CATEGORIA</p>
+                                <div className="flex-1 w-full relative min-h-[90px] flex items-center justify-center">
+                                    <ResponsiveContainer width="100%" height={90} minWidth={0}>
+                                        <PieChart>
+                                            <Pie data={donutData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} stroke="none" dataKey="value" isAnimationActive={false}>
+                                                {donutData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
                                             </Pie>
                                         </PieChart>
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span className="font-black text-gray-900 leading-none" style={{ fontSize: '22px' }}>{ft.total}</span>
-                                            <span className="font-bold text-gray-500 uppercase" style={{ fontSize: '6px' }}>Total</span>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1">
-                                        {[{ c: colorCordas, l: 'Cordas' }, { c: colorMadeiras, l: 'Madeiras' }, { c: colorMetais, l: 'Metais' }, { c: colorAcordeon, l: 'Acordeon' }].map(lg => (
-                                            <div key={lg.l} className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-sm" style={{ backgroundColor: lg.c }} /><span className="font-bold text-gray-500 uppercase" style={{ fontSize: '6.5px' }}>{lg.l}</span></div>
-                                        ))}
+                                    </ResponsiveContainer>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                        <span className="text-sm font-black text-gray-800 leading-none">{ft.total}</span>
+                                        <span className="text-[6px] font-bold text-gray-400 uppercase">Total</span>
                                     </div>
                                 </div>
+                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 w-full px-2 mt-1">
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.gold }} /><span className="text-[6px] font-bold text-gray-600">CORDAS</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.blueLight }} /><span className="text-[6px] font-bold text-gray-600">MADEIRAS</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.green }} /><span className="text-[6px] font-bold text-gray-600">METAIS</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.gray }} /><span className="text-[6px] font-bold text-gray-600">ACORDEON</span></div>
+                                </div>
+                            </div>
 
-                                {/* Personnel */}
-                                <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-200 flex flex-col w-[62%] justify-between overflow-hidden">
-                                    <h3 className="font-black text-gray-600 uppercase text-center tracking-widest flex items-center justify-center gap-1 shrink-0" style={{ fontSize: '8px' }}>
-                                        <span className="h-px bg-gray-200 flex-1" />PESSOAL ADICIONAL<span className="h-px bg-gray-200 flex-1" />
-                                    </h3>
-
-                                    <div className="flex gap-1.5 mt-1 shrink-0">
-                                        <div className="flex-1 bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm">
-                                            <p className="font-black text-gray-600 uppercase" style={{ fontSize: '8px' }}>Músicos</p>
-                                            <p className="font-black text-gray-900" style={{ fontSize: '20px', lineHeight: 1 }}>{stat.musicos || 0}</p>
+                            {/* Totals Column */}
+                            <div className="flex flex-col gap-2 flex-1">
+                                {/* Footer Total Large */}
+                                <div className="rounded-xl p-3 flex items-center justify-between text-white shadow-md flex-1" style={{ backgroundColor: CCB.blueDark }}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="opacity-50">
+                                            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path></svg>
                                         </div>
-                                        <div className="flex-1 bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm">
-                                            <p className="font-black text-gray-600 uppercase" style={{ fontSize: '8px' }}>Organistas</p>
-                                            <p className="font-black text-gray-900" style={{ fontSize: '20px', lineHeight: 1 }}>{stat.organistas || 0}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white rounded-lg py-1 text-center border border-gray-200 shadow-sm mt-1 flex items-center justify-center gap-1.5 shrink-0">
-                                        <Users className="w-3.5 h-3.5 text-gray-500" />
                                         <div>
-                                            <p className="font-black text-gray-600 uppercase leading-none" style={{ fontSize: '8px' }}>Músicos + Organistas</p>
-                                            <p className="font-black text-gray-900 leading-none mt-0.5" style={{ fontSize: '20px' }}>{mt.musicosOrganistas}</p>
+                                            <p className="text-[9px] font-bold tracking-widest uppercase text-gray-300">Total Geral:</p>
+                                            <h3 className="text-4xl font-black leading-none mt-0.5">{mt.totalGeral}</h3>
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="grid grid-cols-3 gap-1 mt-1 flex-1 items-stretch overflow-hidden">
-                                        {ministryItems.map((item, idx) => (
-                                            <div key={idx} className="bg-white rounded-md py-0.5 text-center border border-gray-200 shadow-sm flex flex-col justify-between">
-                                                <p className="font-bold text-gray-600 uppercase px-0.5 leading-tight flex items-center justify-center" style={{ fontSize: '6px', minHeight: '16px' }}>{item.name}</p>
-                                                <p className="font-black text-gray-900 leading-none" style={{ fontSize: '13px' }}>{item.value}</p>
-                                            </div>
-                                        ))}
+                                {/* Bottom Totals */}
+                                <div className="grid grid-cols-1 gap-1.5">
+                                    <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
+                                        <span className="text-[9px] font-black text-gray-700 uppercase">Músicos + Organistas:</span>
+                                        <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.musicosOrganistas}</span>
+                                    </div>
+                                    <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
+                                        <span className="text-[9px] font-black text-gray-700 uppercase">Total Geral:</span>
+                                        <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.totalGeral}</span>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Bottom totals */}
-                            <div className="flex items-stretch gap-2 shrink-0" style={{ height: '58px' }}>
-                                <div className="bg-[#1f2937] rounded-xl p-2.5 flex items-center text-white shadow-md w-[42%]">
-                                    <Users className="w-7 h-7 opacity-80 shrink-0" />
-                                    <div className="flex flex-col ml-2">
-                                        <span className="font-black tracking-widest uppercase text-gray-300" style={{ fontSize: '8px' }}>Total Geral:</span>
-                                        <span className="font-black leading-none tracking-tight" style={{ fontSize: '36px' }}>{mt.totalGeral}</span>
-                                    </div>
-                                </div>
-                                <div className="w-[58%] flex flex-col gap-1 justify-between">
-                                    <div className="flex-1 bg-white rounded-full px-2.5 flex items-center justify-between shadow-sm border border-gray-200" style={{ borderLeftWidth: '4px', borderLeftColor: '#132863' }}>
-                                        <span className="font-black text-gray-600 uppercase tracking-wider" style={{ fontSize: '8.5px' }}>MÚSICOS + ORG.:</span>
-                                        <div className="bg-[#1f2937] text-white px-2.5 py-[1px] rounded-full font-black leading-none" style={{ fontSize: '13px' }}>{mt.musicosOrganistas}</div>
-                                    </div>
-                                    <div className="flex-1 bg-white rounded-full px-2.5 flex items-center justify-between shadow-sm border border-gray-200" style={{ borderLeftWidth: '4px', borderLeftColor: '#132863' }}>
-                                        <span className="font-black text-gray-600 uppercase tracking-wider" style={{ fontSize: '8.5px' }}>TOTAL INSTRUMENTOS:</span>
-                                        <div className="bg-[#1f2937] text-white px-2.5 py-[1px] rounded-full font-black leading-none" style={{ fontSize: '13px' }}>{ft.total}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </main>
-                    </div>
-
-                    {/* ── Footer ── */}
-                    <footer className="flex justify-between items-center text-[9px] font-bold text-gray-400 pt-1.5 border-t border-gray-300 mt-auto shrink-0">
-                        <p>TEMPLATE DE EXPORTAÇÃO v1.2</p>
-                        <div className="flex items-center gap-1 opacity-80">
-                            <div className="w-2 h-2 rounded-full bg-gray-400" />
-                            <span className="font-bold">sistema</span>
                         </div>
-                    </footer>
+
+                    </main>
                 </div>
+
+                {/* Export Footer Info */}
+                <footer className="flex justify-between items-center text-[9px] font-bold text-gray-400 pt-2 border-t border-gray-200 mt-auto">
+                    <p>TEMPLATE DE EXPORTAÇÃO v1.2</p>
+                    <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-gray-400" />
+                        <span>sistema</span>
+                    </div>
+                </footer>
             </div>
         </div>
     );

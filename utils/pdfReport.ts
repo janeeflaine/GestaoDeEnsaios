@@ -1,6 +1,9 @@
 import pdfMake from 'pdfmake/build/pdfmake';
+import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_FIELDS } from '../types';
+import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent, MONTHS_PT } from '../types';
+
+type PdfContent = Record<string, unknown>;
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals } from './orchestraCalculations';
 
 // @ts-ignore - pdfmake font loading
@@ -30,7 +33,7 @@ const C = {
 };
 
 // ─── Colored dot for instrument families ──────────────────────────────
-function colorDot(color: string, size = 5): any {
+function colorDot(color: string, size = 5): PdfContent {
     return {
         canvas: [{ type: 'ellipse', x: size / 2, y: size / 2 + 1, r1: size / 2, r2: size / 2, color }],
         width: size + 3,
@@ -39,7 +42,7 @@ function colorDot(color: string, size = 5): any {
 }
 
 // ─── Progress bar (thick, rounded) ────────────────────────────────────
-function progressBar(pct: number, color: string, width = 105, height = 9): any {
+function progressBar(pct: number, color: string, width = 105, height = 9): PdfContent {
     const fillW = Math.max(0, Math.min(pct, 100)) * (width / 100);
     return {
         canvas: [
@@ -54,7 +57,7 @@ function progressBar(pct: number, color: string, width = 105, height = 9): any {
 function categoryCard(
     label: string, total: number, realPct: number,
     idealPct: number | null, bgColor: string, accentColor: string
-): any {
+): PdfContent {
     const idealStr = idealPct !== null ? `${idealPct}%` : '-';
     return {
         table: {
@@ -100,7 +103,7 @@ function categoryCard(
 }
 
 // ─── Donut chart via canvas polyline arcs ─────────────────────────────
-function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 110): any {
+function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 110): PdfContent {
     const cx = size / 2, cy = size / 2;
     const outerR = size / 2 - 5, innerR = outerR * 0.55;
     const total = ft.total || 1;
@@ -112,7 +115,7 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
         { value: ft.acordeon, color: C.acordeonAccent, label: String(ft.acordeon) },
     ];
 
-    const shapes: any[] = [];
+    const shapes: PdfContent[] = [];
     let startAngle = -Math.PI / 2;
 
     segments.forEach(seg => {
@@ -134,9 +137,6 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
 
         shapes.push({ type: 'polyline', points, closePath: true, color: seg.color });
 
-        // Number label outside the donut
-        const midAngle = startAngle + sweep / 2;
-        const labelR = outerR + 8;
         // We can't easily add labels on canvas in pdfmake, so we skip text-on-canvas
 
         startAngle += sweep;
@@ -155,7 +155,7 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
 }
 
 // ─── Ministry bar chart item ──────────────────────────────────────────
-function ministryBar(label: string, value: number, maxVal: number, color: string): any {
+function ministryBar(label: string, value: number, maxVal: number, color: string): PdfContent {
     const barW = maxVal > 0 ? Math.round((value / maxVal) * 50) : 0;
     return {
         stack: [
@@ -176,13 +176,13 @@ function ministryBar(label: string, value: number, maxVal: number, color: string
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MAIN PDF GENERATION
+// STATISTICS DOC DEFINITION BUILDER
 // ═══════════════════════════════════════════════════════════════════════
-export function generateStatisticsPDF(
+function buildStatisticsDocDef(
     stat: EventStatistic,
     congregation?: Congregation | null,
     anciao?: Anciao | null,
-) {
+): TDocumentDefinitions {
     const ft = calcFamilyTotals(stat);
     const pct = calcFamilyPercentages(ft);
     const mt = calcMinistryTotals(stat);
@@ -192,7 +192,7 @@ export function generateStatisticsPDF(
     }).toUpperCase();
 
     // ─── Instrument detail rows ───────────────────────────────────────
-    const instrumentRows: any[][] = [];
+    const instrumentRows: PdfContent[][] = [];
 
     const addFamily = (label: string, total: number, dotColor: string, bgColor: string, instruments: readonly { key: string; label: string }[]) => {
         // Family header row
@@ -209,7 +209,7 @@ export function generateStatisticsPDF(
         ]);
         // Individual instruments
         instruments.forEach((inst, idx) => {
-            const val = (stat as any)[inst.key] || 0;
+            const val = (stat[inst.key as keyof EventStatistic] as number) || 0;
             const zebra = idx % 2 === 0 ? C.tableZebra : C.cardBg;
             instrumentRows.push([
                 {
@@ -233,7 +233,7 @@ export function generateStatisticsPDF(
     // ─── Ministry items for bar chart ─────────────────────────────────
     const ministryItems = MINISTRY_FIELDS.map(f => ({
         label: f.label.replace('Presentes', '').replace('Música', 'Música').trim(),
-        value: (stat as any)[f.key] || 0,
+        value: (stat[f.key as keyof EventStatistic] as number) || 0,
     }));
     const maxMinistry = Math.max(...ministryItems.map(i => i.value), 1);
 
@@ -243,7 +243,7 @@ export function generateStatisticsPDF(
     // ═══════════════════════════════════════════════════════════════════
     // DOCUMENT
     // ═══════════════════════════════════════════════════════════════════
-    const docDefinition: any = {
+    const docDefinition: TDocumentDefinitions = ({
         pageSize: 'A4',
         pageMargins: [14, 14, 14, 28],
         background: () => ({
@@ -408,8 +408,8 @@ export function generateStatisticsPDF(
                             ],
                         },
                         layout: {
-                            hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
-                            vLineWidth: (i: number, node: any) => (i === 0 || i === node.table.widths.length) ? 0.7 : 0.3,
+                            hLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
+                            vLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === node.table.widths.length) ? 0.7 : 0.3,
                             hLineColor: () => C.tableBorder,
                             vLineColor: () => C.tableBorder,
                             paddingLeft: () => 1,
@@ -584,8 +584,226 @@ export function generateStatisticsPDF(
         defaultStyle: {
             font: 'Roboto',
         },
-    };
+    }) as unknown as TDocumentDefinitions;
 
+    return docDefinition as unknown as TDocumentDefinitions;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN PDF GENERATION
+// ═══════════════════════════════════════════════════════════════════════
+export function generateStatisticsPDF(
+    stat: EventStatistic,
+    congregation?: Congregation | null,
+    anciao?: Anciao | null,
+) {
     const fileName = `Estatistica_${congregation?.name || 'Evento'}_${stat.event_date}.pdf`;
-    pdfMake.createPdf(docDefinition).download(fileName);
+    pdfMake.createPdf(buildStatisticsDocDef(stat, congregation, anciao)).download(fileName);
+}
+
+/** Returns a promise resolving to the PDF data URL (for preview) */
+export function getStatisticsPdfDataUrl(
+    stat: EventStatistic,
+    congregation?: Congregation | null,
+    anciao?: Anciao | null,
+): Promise<string> {
+    return new Promise((resolve) => {
+        pdfMake.createPdf(buildStatisticsDocDef(stat, congregation, anciao)).getDataUrl(resolve);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRESENCE LIST PDF
+// ═══════════════════════════════════════════════════════════════════════
+export function generatePresencePDF(
+    event: { day: string; month: string; location: string; time: string; conductor: string; type: string },
+    presences: { name: string; instrument: string; phone: string; email: string }[],
+): void {
+    const headerRows: PdfContent[][] = [
+        [
+            { text: '#', bold: true, fontSize: 8, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [4, 4] },
+            { text: 'NOME', bold: true, fontSize: 8, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 4] },
+            { text: 'INSTRUMENTO', bold: true, fontSize: 8, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 4] },
+            { text: 'TELEFONE', bold: true, fontSize: 8, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 4] },
+        ],
+    ];
+
+    const dataRows: PdfContent[][] = presences.map((p, i) => {
+        const zebra = i % 2 === 0 ? C.tableZebra : C.cardBg;
+        return [
+            { text: String(i + 1), fontSize: 7.5, fillColor: zebra, alignment: 'center', margin: [2, 3] },
+            { text: p.name, fontSize: 7.5, fillColor: zebra, margin: [4, 3] },
+            { text: p.instrument, fontSize: 7.5, fillColor: zebra, margin: [4, 3] },
+            { text: p.phone || '-', fontSize: 7.5, fillColor: zebra, margin: [4, 3] },
+        ];
+    });
+
+    const docDefinition: TDocumentDefinitions = {
+        pageSize: 'A4',
+        pageMargins: [30, 30, 30, 40],
+        background: () => ({
+            canvas: [{ type: 'rect', x: 0, y: 0, w: 595.28, h: 841.89, color: C.pageBg }],
+        }),
+        content: [
+            // Header
+            {
+                table: { widths: ['*'], body: [[{
+                    stack: [
+                        { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
+                        { text: 'LISTA DE PRESENÇA', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center', margin: [0, 0, 0, 2] },
+                        { text: event.location, fontSize: 9, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, 2] },
+                        { text: `${event.day}${event.month ? ' de ' + event.month : ''}${event.time ? ' — ' + event.time : ''}`, fontSize: 8, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, event.conductor ? 2 : 8] },
+                        ...(event.conductor ? [{ text: `Maestro: ${event.conductor}`, fontSize: 8, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] }] : []),
+                    ],
+                    fillColor: C.cardBg,
+                }]] },
+                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+                margin: [0, 0, 0, 10],
+            },
+            // Table
+            {
+                table: {
+                    headerRows: 1,
+                    widths: [25, '*', 100, 90],
+                    body: [...headerRows, ...dataRows],
+                },
+                layout: {
+                    hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
+                    vLineWidth: () => 0.5,
+                    hLineColor: () => C.tableBorder,
+                    vLineColor: () => C.tableBorder,
+                },
+            },
+            // Footer total
+            {
+                text: `Total de confirmados: ${presences.length}`,
+                fontSize: 9,
+                bold: true,
+                color: C.sectionHeader,
+                alignment: 'right',
+                margin: [0, 8, 0, 0],
+            },
+        ],
+        footer: (currentPage: number, pageCount: number) => ({
+            columns: [
+                { text: 'Lista de Presença', fontSize: 6, color: C.labelColor, margin: [30, 0, 0, 0] },
+                { text: `Página ${currentPage} de ${pageCount}`, fontSize: 6, color: C.labelColor, alignment: 'right', margin: [0, 0, 30, 0] },
+            ],
+            margin: [0, 8, 0, 0],
+        }),
+        defaultStyle: { font: 'Roboto' },
+    } as unknown as TDocumentDefinitions;
+
+    const safeDay = event.day.replace(/\//g, '-');
+    pdfMake.createPdf(docDefinition).download(`Lista_Presenca_${safeDay}.pdf`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ANNUAL SCHEDULE PDF
+// ═══════════════════════════════════════════════════════════════════════
+export function generateSchedulePDF(
+    events: RehearsalEvent[],
+    year: number,
+    congregationName?: string,
+): void {
+    // Group events by month name
+    const byMonth: Record<string, RehearsalEvent[]> = {};
+    MONTHS_PT.forEach(m => { byMonth[m] = []; });
+    events.forEach(ev => {
+        if (byMonth[ev.month] !== undefined) {
+            byMonth[ev.month].push(ev);
+        }
+    });
+
+    const content: PdfContent[] = [
+        // Title header
+        {
+            table: { widths: ['*'], body: [[{
+                stack: [
+                    { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
+                    ...(congregationName ? [{ text: congregationName.toUpperCase(), fontSize: 9, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] }] : []),
+                    { text: 'CRONOGRAMA DE ENSAIOS', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] },
+                    { text: String(year), fontSize: 9, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] },
+                ],
+                fillColor: C.cardBg,
+            }]] },
+            layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+            margin: [0, 0, 0, 12],
+        } as PdfContent,
+    ];
+
+    MONTHS_PT.forEach(month => {
+        const monthEvents = byMonth[month];
+        if (monthEvents.length === 0) return;
+
+        // Month section header
+        content.push({
+            table: { widths: ['*'], body: [[{
+                text: month.toUpperCase(),
+                bold: true, fontSize: 9, alignment: 'center',
+                fillColor: C.headerBar, color: C.sectionHeader,
+                margin: [0, 4, 0, 4],
+            }]] },
+            layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+            margin: [0, 6, 0, 2],
+        } as PdfContent);
+
+        const tableRows: PdfContent[][] = [
+            [
+                { text: 'DIA', bold: true, fontSize: 7.5, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [2, 3] },
+                { text: 'LOCAL', bold: true, fontSize: 7.5, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 3] },
+                { text: 'MAESTRO', bold: true, fontSize: 7.5, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 3] },
+                { text: 'TIPO', bold: true, fontSize: 7.5, fillColor: C.headerBar, color: C.sectionHeader, margin: [4, 3] },
+                { text: 'STATUS', bold: true, fontSize: 7.5, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [4, 3] },
+            ],
+        ];
+
+        monthEvents.forEach((ev, i) => {
+            const isCanceled = !!ev.canceled;
+            const statusBg = isCanceled ? '#FDECEA' : (i % 2 === 0 ? C.tableZebra : C.cardBg);
+            const rowBg = isCanceled ? '#FDECEA' : (i % 2 === 0 ? C.tableZebra : C.cardBg);
+            const statusColor = isCanceled ? '#C0392B' : '#27AE60';
+            tableRows.push([
+                { text: ev.day, fontSize: 7.5, fillColor: rowBg, alignment: 'center', margin: [2, 3] },
+                { text: ev.location, fontSize: 7.5, fillColor: rowBg, margin: [4, 3] },
+                { text: ev.conductor, fontSize: 7.5, fillColor: rowBg, margin: [4, 3] },
+                { text: ev.type, fontSize: 7.5, fillColor: rowBg, margin: [4, 3] },
+                { text: isCanceled ? 'Cancelado' : 'Confirmado', fontSize: 7.5, fillColor: statusBg, color: statusColor, bold: true, alignment: 'center', margin: [4, 3] },
+            ]);
+        });
+
+        content.push({
+            table: {
+                headerRows: 1,
+                widths: [30, '*', 100, 80, 65],
+                body: tableRows,
+            },
+            layout: {
+                hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
+                vLineWidth: () => 0.5,
+                hLineColor: () => C.tableBorder,
+                vLineColor: () => C.tableBorder,
+            },
+            margin: [0, 0, 0, 4],
+        } as PdfContent);
+    });
+
+    const docDefinition: TDocumentDefinitions = {
+        pageSize: 'A4',
+        pageMargins: [30, 30, 30, 40],
+        background: () => ({
+            canvas: [{ type: 'rect', x: 0, y: 0, w: 595.28, h: 841.89, color: C.pageBg }],
+        }),
+        content,
+        footer: (currentPage: number, pageCount: number) => ({
+            columns: [
+                { text: `Cronograma ${year}`, fontSize: 6, color: C.labelColor, margin: [30, 0, 0, 0] },
+                { text: `Página ${currentPage} de ${pageCount}`, fontSize: 6, color: C.labelColor, alignment: 'right', margin: [0, 0, 30, 0] },
+            ],
+            margin: [0, 8, 0, 0],
+        }),
+        defaultStyle: { font: 'Roboto' },
+    } as unknown as TDocumentDefinitions;
+
+    pdfMake.createPdf(docDefinition).download(`Cronograma_${year}.pdf`);
 }

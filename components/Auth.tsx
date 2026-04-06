@@ -51,8 +51,8 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                     alert('Cadastro realizado! Por favor, verifique seu e-mail para confirmar a conta e poder fazer login.');
                 }
             }
-        } catch (error: any) {
-            alert(error.message);
+        } catch (error: unknown) {
+            alert(error instanceof Error ? error.message : 'Erro desconhecido');
         } finally {
             setLoading(false);
         }

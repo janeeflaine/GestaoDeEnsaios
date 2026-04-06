@@ -25,7 +25,7 @@ export default function StatisticsForm({
     congregations, events, anciaes, encRegionais: initialEncRegionais,
     onClose, onSaved, editingStat
 }: StatisticsFormProps) {
-    const encRegionais = initialEncRegionais as any[];
+    const encRegionais = initialEncRegionais;
     const [stat, setStat] = useState<EventStatistic>(editingStat || emptyStatistic());
     const [selectedEncRegionais, setSelectedEncRegionais] = useState<string[]>([]);
     const [showAnciaoModal, setShowAnciaoModal] = useState(false);
@@ -42,9 +42,7 @@ export default function StatisticsForm({
 
     const handleSave = async () => {
         setSaving(true);
-        const payload = { ...stat };
-        delete (payload as any).id;
-        delete (payload as any).created_at;
+        const { id: _id, created_at: _ca, ...payload } = stat as EventStatistic & { id?: string; created_at?: string };
 
         let error;
         if (editingStat?.id) {
@@ -104,7 +102,7 @@ export default function StatisticsForm({
                             <label className="text-[11px] text-slate-500 font-bold truncate block" title={inst.label}>{inst.label}</label>
                             <input
                                 type="number" min="0" placeholder="0"
-                                value={(stat as any)[inst.key] || ''}
+                                value={(stat[inst.key as keyof EventStatistic] as number) || ''}
                                 onChange={e => updateField(inst.key, e.target.value ? parseInt(e.target.value) : 0)}
                                 className={inputClass}
                             />
@@ -264,7 +262,7 @@ export default function StatisticsForm({
                                     <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
                                     <input
                                         type="number" min="0"
-                                        value={(stat as any)[field.key] || 0}
+                                        value={(stat[field.key as keyof EventStatistic] as number) || 0}
                                         onChange={e => updateField(field.key, parseInt(e.target.value) || 0)}
                                         className={inputClass}
                                     />

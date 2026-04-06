@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, List, User, Settings, Music, BarChart3 } from 'lucide-react';
+import { Layout, List, User, Settings, Music, BarChart3, Sparkles } from 'lucide-react';
 import { UserProfile } from '../types';
 
 const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void; user: UserProfile | null }> = ({ activeTab, setActiveTab, user }) => (
@@ -29,6 +29,13 @@ const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void;
                 )}
                 <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
             </button>
+
+            {user && (
+                <button onClick={() => setActiveTab('ia')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'ia' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <Sparkles size={20} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">IA</span>
+                </button>
+            )}
 
             {user?.role === 'ADMIN' && (
                 <>

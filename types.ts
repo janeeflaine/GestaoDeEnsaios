@@ -79,6 +79,8 @@ export interface Encarregado {
   age: number;
   instrument: string;
   congregation: string;
+  city?: string;
+  state?: string;
   photoUrl: string;
   type: ConductorType;
 }
@@ -93,6 +95,7 @@ export interface RehearsalEvent {
   conductor: string;
   type: EventType | string;
   canceled?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface Presence {

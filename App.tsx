@@ -1,41 +1,101 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-// FORCE_RELOAD_TEST_TIMESTAMP: 1768503028047
-import { Layout, Calendar, CheckCircle, List, Settings, Plus, X, CalendarPlus, ChevronRight, User, Phone, Mail, Music, Filter, RotateCcw, Edit2, Sparkles, Users, Droplets, Clock, MapPin, Search, Trash2, Camera, Map, ClipboardList, LogOut, Landmark, Briefcase, Home, Info, Upload, UserPlus } from 'lucide-react';
-import { RehearsalEvent, EventType, Presence, MONTHS_PT, INSTRUMENTS, Encarregado, ConductorType, UserProfile, Congregation, ServiceDay, Ministry, WEEK_DAYS, CongregationCategory, MinistryRole, EventTypeDefinition } from './types';
-import { INITIAL_EVENTS, INITIAL_CONDUCTORS, INITIAL_CONGREGATIONS, EVENT_COLORS } from './constants';
-import { getGoogleCalendarUrl } from './utils/calendar';
+import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
+import { Plus } from 'lucide-react';
+import {
+  RehearsalEvent,
+  EventType,
+  Encarregado,
+  Congregation,
+  UserProfile,
+  CongregationCategory,
+  MinistryRole,
+  EventTypeDefinition,
+  ServiceDay,
+  Ministry,
+  UserRole,
+} from './types';
 import { supabase } from './supabaseClient';
+import type { Session } from '@supabase/supabase-js';
 import ImageCropperModal from './components/ImageCropper';
 import Auth from './components/Auth';
-
-import { getTypeStyles, getFriendlyEventName } from './utils/eventHelpers';
-import DashboardStatCard from './components/DashboardStatCard';
-import LargeEventCard from './components/LargeEventCard';
-import EventSummaryCard from './components/EventSummaryCard';
-import ConductorProfileCard from './components/ConductorProfileCard';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import StatisticsDashboard from './components/StatisticsDashboard';
-// --- Main App ---
+import { ToastContainer } from './components/Toast';
+
+// Pages
+import { DashboardPage } from './pages/DashboardPage';
+import { EventsPage } from './pages/EventsPage';
+import { ProfilePage } from './pages/ProfilePage';
+
+// Lazy-loaded pages (heavy)
+const StatisticsDashboard = lazy(() => import('./components/StatisticsDashboard'));
+const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const AiPage = lazy(() => import('./pages/AiPage').then(m => ({ default: m.AiPage })));
+
+// Modals
+import { PresenceModal } from './components/modals/PresenceModal';
+import { EventModal } from './components/modals/EventModal';
+import { ConductorModal } from './components/modals/ConductorModal';
+import { CongregationModal } from './components/modals/CongregationModal';
+import { EditMemberModal } from './components/modals/EditMemberModal';
+import { DeleteMemberModal } from './components/modals/DeleteMemberModal';
+import { DeleteEventModal } from './components/modals/DeleteEventModal';
+
+// Hooks & services
+import { useAppData } from './hooks/useAppData';
+import { useToast } from './hooks/useToast';
+import * as eventsService from './services/events';
+import * as conductorsService from './services/conductors';
+import * as congregationsService from './services/congregations';
+import * as presencesService from './services/presences';
+import * as profilesService from './services/profiles';
+import * as configService from './services/config';
+
+import { getFriendlyEventName } from './utils/eventHelpers';
+import logger from './utils/logger';
+
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [adminSubTab, setAdminSubTab] = useState<'events' | 'conductors' | 'confirmations' | 'congregations' | 'users'>('events');
-  const [events, setEvents] = useState<RehearsalEvent[]>([]);
-  const [conductors, setConductors] = useState<Encarregado[]>([]);
-  const [congregations, setCongregations] = useState<Congregation[]>([]);
-  const [presences, setPresences] = useState<Presence[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Auth States
-  const [session, setSession] = useState<any>(null);
-  const [isGuest, setIsGuest] = useState(false);
+  // ── Auth state ────────────────────────────────────────────────
+  const [session, setSession] = useState<Session | null>(null);
+  const [isGuest, setIsGuest] = useState(() => sessionStorage.getItem('guestMode') === 'true');
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
+  const enterGuest = () => { sessionStorage.setItem('guestMode', 'true'); setIsGuest(true); };
+  const exitGuest = () => { sessionStorage.removeItem('guestMode'); setIsGuest(false); };
+
+  // ── Navigation ────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [adminSubTab, setAdminSubTab] = useState<
+    'events' | 'conductors' | 'confirmations' | 'congregations' | 'users' | 'settings'
+  >('events');
+
+  // ── Data ─────────────────────────────────────────────────────
+  const {
+    events,
+    conductors,
+    congregations,
+    presences,
+    categories,
+    roles,
+    eventTypeList,
+    allProfiles,
+    isLoading,
+    fetchAll,
+    refreshEvents,
+    refreshConductors,
+    refreshCongregations,
+    refreshPresences,
+    refreshProfiles,
+    refreshConfig,
+  } = useAppData();
+
+  // ── Toast ────────────────────────────────────────────────────
+  const { toasts, showToast, removeToast } = useToast();
+
+  // ── Modal state ───────────────────────────────────────────────
   const [selectedEvent, setSelectedEvent] = useState<RehearsalEvent | null>(null);
   const [selectedConductor, setSelectedConductor] = useState<Encarregado | null>(null);
   const [selectedCongregation, setSelectedCongregation] = useState<Congregation | null>(null);
-
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDeletingEvent, setIsDeletingEvent] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<RehearsalEvent | null>(null);
@@ -47,178 +107,90 @@ export default function App() {
   const [isDeletingMember, setIsDeletingMember] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<UserProfile | null>(null);
 
+  // ── Form / UI state ───────────────────────────────────────────
   const [creatingEventType, setCreatingEventType] = useState<string>(EventType.LOCAL);
-
-  // Dynamic Data States
-  const [categories, setCategories] = useState<CongregationCategory[]>([]);
-  const [roles, setRoles] = useState<MinistryRole[]>([]);
-  const [eventTypeList, setEventTypeList] = useState<EventTypeDefinition[]>([]);
-  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
-
-  // Local/Temporary States for Dynamic Forms
   const [tempServiceDays, setTempServiceDays] = useState<ServiceDay[]>([]);
   const [tempMinistry, setTempMinistry] = useState<Ministry[]>([]);
-
-  // Editing configurations
   const [editingCategory, setEditingCategory] = useState<CongregationCategory | null>(null);
   const [editingRole, setEditingRole] = useState<MinistryRole | null>(null);
   const [editingEventType, setEditingEventType] = useState<EventTypeDefinition | null>(null);
 
-  // Profile Form State
+  // Profile form
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     instrument: 'Violino',
     congregation: '',
     congregationId: '',
-    photoUrl: ''
+    photoUrl: '',
   });
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Photo Upload State
+  // Photo upload
   const [isCropping, setIsCropping] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filters
   const [globalSearch, setGlobalSearch] = useState('');
   const [monthFilter, setMonthFilter] = useState('Todos');
   const [conductorFilter, setConductorFilter] = useState('Todos');
   const [locationFilter, setLocationFilter] = useState('Todos');
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [presenceSearch, setPresenceSearch] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
   const [congregationSearch, setCongregationSearch] = useState('');
 
-  // Supabase Auth Listener
+  // ── Auth listener ─────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchUserProfile(session.user.id);
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s) fetchUserProfileData(s.user.id, s);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) fetchUserProfile(session.user.id);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) fetchUserProfileData(s.user.id, s);
       else setUserProfile(null);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
-    if (!error && data) {
-      const profile = {
-        ...data,
-        photoUrl: data.photo_url
-      };
+  const fetchUserProfileData = async (userId: string, currentSession?: Session) => {
+    const profile = await profilesService.fetchUserProfile(userId);
+    if (profile) {
       setUserProfile(profile);
       setFormData({
         name: profile.name || '',
         phone: profile.phone || '',
         instrument: profile.instrument || 'Violino',
         congregation: profile.congregation || '',
-        congregationId: profile.congregation_id || '',
-        photoUrl: profile.photoUrl || ''
+        congregationId: (profile as UserProfile & { congregation_id?: string }).congregation_id || '',
+        photoUrl: profile.photoUrl || '',
       });
     } else {
-      // If profile doesn't exist, initialize from session metadata if possible
-      const metadata = session?.user?.user_metadata;
+      const metadata = currentSession?.user?.user_metadata;
       setFormData({
         name: metadata?.name || '',
         phone: '',
         instrument: metadata?.instrument || 'Violino',
         congregation: '',
         congregationId: '',
-        photoUrl: ''
+        photoUrl: '',
       });
     }
   };
 
-  // Carregar dados iniciais do Supabase
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const fetchInitialData = async () => {
-    setIsLoading(true);
-    try {
-      // Fetch Events
-      const { data: eventsData, error: eError } = await supabase.from('events').select('*');
-      if (eError) console.error('Supabase: Erro ao buscar eventos:', eError);
-      if (eventsData) {
-        setEvents(eventsData.map(e => ({
-          ...e,
-          fullDate: new Date(e.full_date)
-        })));
-      }
-
-      // Fetch Conductors
-      const { data: condData, error: cError } = await supabase.from('conductors').select('*');
-      if (cError) console.error('Supabase: Erro ao buscar encarregados:', cError);
-      if (condData) {
-        setConductors(condData.map(c => ({
-          ...c,
-          photoUrl: c.photo_url
-        })));
-      }
-
-      // Fetch Congregations
-      const { data: congData, error: cgError } = await supabase.from('congregations').select('*, service_days(*), ministry(*)');
-      if (cgError) {
-        console.error('Supabase: Erro ao buscar congregações:', cgError);
-      }
-      if (congData) {
-        setCongregations(congData.map(c => ({
-          ...c,
-          serviceDays: c.service_days || [],
-          ministry: c.ministry || []
-        })));
-      }
-
-      // Fetch Presences
-      const { data: presData, error: pError } = await supabase.from('presences').select('*');
-      if (pError) console.error('Supabase: Erro ao buscar presenças:', pError);
-      if (presData) {
-        setPresences(presData.map(p => ({
-          ...p,
-          eventId: p.event_id,
-          timestamp: new Date(p.timestamp)
-        })));
-      }
-
-      // Fetch Categories
-      const { data: catData } = await supabase.from('congregation_categories').select('*').order('name');
-      if (catData) setCategories(catData);
-
-      // Fetch Roles
-      const { data: roleData } = await supabase.from('ministry_roles').select('*').order('name');
-      if (roleData) setRoles(roleData);
-
-      // Fetch Event Types
-      const { data: typeData } = await supabase.from('event_types').select('*').order('name');
-      if (typeData) setEventTypeList(typeData);
-
-      // Fetch All Profiles (for ministry lookup)
-      const { data: profData } = await supabase.from('profiles').select('*').order('name');
-      if (profData) setAllProfiles(profData);
-    } catch (error) {
-      console.error('Erro geral ao carregar dados:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Real Current Date
+  // ── Derived data ──────────────────────────────────────────────
   const today = new Date();
 
   const congregationList = useMemo(() => {
-    const list = congregations.map(c => c.name);
-    // Ensure the user's current congregation is in the list if it exists
+    const list = congregations.map((c) => c.name);
     if (userProfile?.congregation && !list.includes(userProfile.congregation)) {
       list.push(userProfile.congregation);
     }
@@ -226,59 +198,59 @@ export default function App() {
   }, [congregations, userProfile?.congregation]);
 
   const dashboardData = useMemo(() => {
-    let futureEvents = events.filter(e => e.fullDate >= today && !e.canceled).sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
+    let futureEvents = events
+      .filter((e) => e.fullDate >= today && !e.canceled)
+      .sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
 
     if (globalSearch) {
-      futureEvents = futureEvents.filter(e =>
-        e.location.toLowerCase().includes(globalSearch.toLowerCase()) ||
-        e.conductor.toLowerCase().includes(globalSearch.toLowerCase())
+      futureEvents = futureEvents.filter(
+        (e) =>
+          e.location.toLowerCase().includes(globalSearch.toLowerCase()) ||
+          e.conductor.toLowerCase().includes(globalSearch.toLowerCase())
       );
     }
 
-    return {
-      largeEvents: futureEvents.slice(0, 4),
-      smallEvents: futureEvents.slice(4, 8)
-    };
+    return { largeEvents: futureEvents.slice(0, 4), smallEvents: futureEvents.slice(4, 8) };
   }, [events, today, globalSearch]);
 
   const stats = useMemo(() => {
-    const activeEvents = events.filter(e => !e.canceled);
-
-    const countStats = (types: EventType[]) => {
-      const filtered = activeEvents.filter(e => types.includes(e.type));
-      return {
-        total: filtered.length,
-        remaining: filtered.filter(e => e.fullDate >= today).length
-      };
+    const activeEvents = events.filter((e) => !e.canceled);
+    const countStats = (types: string[]) => {
+      const filtered = activeEvents.filter((e) => types.includes(e.type));
+      return { total: filtered.length, remaining: filtered.filter((e) => e.fullDate >= today).length };
     };
-
     return {
       total: countStats(Object.values(EventType)),
       rehearsals: countStats([EventType.LOCAL, EventType.REGIONAL]),
       baptisms: countStats([EventType.BATISMO]),
       youth: countStats([EventType.REUNIAO_MOCIDADE]),
       gifts: countStats([EventType.BUSCA_DONS]),
-      presences: presences.length
+      presences: presences.length,
     };
   }, [events, today, presences]);
 
-  const uniqueConductors = useMemo(() => ['Todos', ...new Set(conductors.map(c => c.name))].sort(), [conductors]);
-  const uniqueLocations = useMemo(() => ['Todos', ...new Set(congregations.map(c => c.name))].sort(), [congregations]);
-  const eventTypes = useMemo(() => ['Todos', ...eventTypeList.map(t => t.name)], [eventTypeList]);
+  const uniqueConductors = useMemo(
+    () => ['Todos', ...new Set(conductors.map((c) => c.name))].sort(),
+    [conductors]
+  );
+  const uniqueLocations = useMemo(
+    () => ['Todos', ...new Set(congregations.map((c) => c.name))].sort(),
+    [congregations]
+  );
+  const eventTypes = useMemo(() => ['Todos', ...eventTypeList.map((t) => t.name)], [eventTypeList]);
 
   const filteredEvents = useMemo(() => {
     let list = events;
-    if (monthFilter !== 'Todos') list = list.filter(e => e.month === monthFilter);
-    if (conductorFilter !== 'Todos') list = list.filter(e => e.conductor === conductorFilter);
-    if (locationFilter !== 'Todos') list = list.filter(e => e.location === locationFilter);
+    if (monthFilter !== 'Todos') list = list.filter((e) => e.month === monthFilter);
+    if (conductorFilter !== 'Todos') list = list.filter((e) => e.conductor === conductorFilter);
+    if (locationFilter !== 'Todos') list = list.filter((e) => e.location === locationFilter);
     if (typeFilter !== 'Todos') {
-      const typeDef = eventTypeList.find(t => t.name === typeFilter);
-      list = list.filter(e => {
+      const typeDef = eventTypeList.find((t) => t.name === typeFilter);
+      list = list.filter((e) => {
         if (!typeDef) return e.type === typeFilter;
         return e.type === typeDef.name || e.type === typeDef.value;
       });
     }
-
     return list.sort((a, b) => a.fullDate.getTime() - b.fullDate.getTime());
   }, [events, monthFilter, conductorFilter, locationFilter, typeFilter, eventTypeList]);
 
@@ -286,12 +258,14 @@ export default function App() {
     let list = presences;
     if (presenceSearch) {
       const search = presenceSearch.toLowerCase();
-      list = list.filter(p => {
-        const event = events.find(e => e.id === p.eventId);
-        return p.name.toLowerCase().includes(search) ||
+      list = list.filter((p) => {
+        const event = events.find((e) => e.id === p.eventId);
+        return (
+          p.name.toLowerCase().includes(search) ||
           p.instrument.toLowerCase().includes(search) ||
-          (event?.location.toLowerCase().includes(search)) ||
-          (getFriendlyEventName(event?.type || EventType.LOCAL).toLowerCase().includes(search));
+          event?.location.toLowerCase().includes(search) ||
+          getFriendlyEventName(event?.type || EventType.LOCAL).toLowerCase().includes(search)
+        );
       });
     }
     return list.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -301,16 +275,21 @@ export default function App() {
     let list = congregations;
     if (congregationSearch) {
       const search = congregationSearch.toLowerCase();
-      list = list.filter(c =>
-        c.name.toLowerCase().includes(search) ||
-        c.city.toLowerCase().includes(search) ||
-        c.category.toLowerCase().includes(search)
+      list = list.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search) ||
+          c.city.toLowerCase().includes(search) ||
+          c.category.toLowerCase().includes(search)
       );
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [congregations, congregationSearch]);
 
-  const hasActiveFilters = monthFilter !== 'Todos' || conductorFilter !== 'Todos' || locationFilter !== 'Todos' || typeFilter !== 'Todos';
+  const hasActiveFilters =
+    monthFilter !== 'Todos' ||
+    conductorFilter !== 'Todos' ||
+    locationFilter !== 'Todos' ||
+    typeFilter !== 'Todos';
 
   const clearFilters = () => {
     setMonthFilter('Todos');
@@ -319,148 +298,120 @@ export default function App() {
     setTypeFilter('Todos');
   };
 
+  // ── Handlers ──────────────────────────────────────────────────
   const handleConfirmPresence = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const fd = new FormData(e.currentTarget);
     const newPresence = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       event_id: selectedEvent?.id || '',
-      name: formData.get('name') as string,
-      email: (formData.get('email') as string) || '',
-      phone: formData.get('phone') as string,
-      instrument: formData.get('instrument') as string,
+      name: fd.get('name') as string,
+      email: (fd.get('email') as string) || '',
+      phone: fd.get('phone') as string,
+      instrument: fd.get('instrument') as string,
     };
-
-    const { error } = await supabase.from('presences').insert(newPresence);
-    if (!error) {
-      await fetchInitialData();
+    try {
+      await presencesService.insertPresence(newPresence);
+      await refreshPresences();
       setIsConfirming(false);
       setSelectedEvent(null);
-      alert('Presença confirmada com sucesso!');
-    } else {
-      alert('Erro ao confirmar presença: ' + error.message);
+      showToast('Presença confirmada com sucesso!', 'success');
+    } catch (err) {
+      showToast('Erro ao confirmar presença: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
   const handleAddOrUpdateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const month = formData.get('month') as string;
-    const dayValue = formData.get('day') as string;
-    const weekday = formData.get('weekday') as string;
-    const type = formData.get('type') as EventType;
-    const monthIndex = MONTHS_PT.indexOf(month);
-
+    const fd = new FormData(e.currentTarget);
+    const month = fd.get('month') as string;
+    const dayValue = fd.get('day') as string;
+    const weekday = fd.get('weekday') as string;
+    const type = fd.get('type') as EventType;
+    const monthIndex = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].indexOf(month);
     const needsConductor = ![EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(type);
 
     const eventData = {
-      id: selectedEvent ? selectedEvent.id : `event-${Date.now()}`,
+      id: selectedEvent ? selectedEvent.id : crypto.randomUUID(),
       month,
       day: `${dayValue.padStart(2, '0')} (${weekday})`,
-      full_date: new Date(2026, monthIndex, parseInt(dayValue)).toISOString(),
-      location: formData.get('location') as string,
-      time: formData.get('time') as string,
-      conductor: needsConductor ? (formData.get('conductor') as string) : 'Coletivo',
-      type: type,
+      full_date: new Date(new Date().getFullYear(), monthIndex, parseInt(dayValue)).toISOString(),
+      location: fd.get('location') as string,
+      time: fd.get('time') as string,
+      conductor: needsConductor ? (fd.get('conductor') as string) : 'Coletivo',
+      type,
     };
 
-    const { error } = await supabase.from('events').upsert(eventData);
-    if (!error) {
-      await fetchInitialData();
+    try {
+      await eventsService.upsertEvent(eventData);
+      await refreshEvents();
       setIsCreatingEvent(false);
       setSelectedEvent(null);
-      alert(selectedEvent ? 'Evento atualizado com sucesso!' : 'Evento criado com sucesso!');
-    } else {
-      alert('Erro ao salvar evento: ' + error.message);
+      showToast(selectedEvent ? 'Evento atualizado com sucesso!' : 'Evento criado com sucesso!', 'success');
+    } catch (err) {
+      showToast('Erro ao salvar evento: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
   const handleAddOrUpdateConductor = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
+    const fd = new FormData(e.currentTarget);
+    const name = fd.get('name') as string;
     const conductorData = {
-      id: selectedConductor?.id || `cond-${Date.now()}`,
-      name: formData.get('name') as string,
-      age: parseInt(formData.get('age') as string),
-      instrument: formData.get('instrument') as string,
-      congregation: formData.get('congregation') as string,
-      type: formData.get('type') as ConductorType,
-      photo_url: (formData.get('photoUrl') as string) || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.get('name') as string)}&background=random`,
+      id: selectedConductor?.id || crypto.randomUUID(),
+      name,
+      age: parseInt(fd.get('age') as string),
+      instrument: fd.get('instrument') as string,
+      congregation: fd.get('congregation') as string,
+      type: fd.get('type') as string,
+      photo_url:
+        (fd.get('photoUrl') as string) ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
     };
-
-    const { error } = await supabase.from('conductors').upsert(conductorData);
-    if (!error) {
-      await fetchInitialData();
+    try {
+      await conductorsService.upsertConductor(conductorData);
+      await refreshConductors();
       setIsCreatingConductor(false);
       setSelectedConductor(null);
-      alert(selectedConductor ? 'Perfil atualizado!' : 'Encarregado cadastrado!');
-    } else {
-      alert('Erro ao salvar encarregado: ' + error.message);
+      showToast(selectedConductor ? 'Perfil atualizado!' : 'Encarregado cadastrado!', 'success');
+    } catch (err) {
+      showToast('Erro ao salvar encarregado: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
   const handleAddOrUpdateCongregation = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    const congregationId = selectedCongregation?.id || `cong-${Date.now()}`;
-
-    // Validate inputs
+    const fd = new FormData(e.currentTarget);
     if (tempServiceDays.length === 0) {
-      alert('Adicione ao menos um dia de culto.');
+      showToast('Adicione ao menos um dia de culto.', 'warning');
       return;
     }
-
+    const congregationId = selectedCongregation?.id || crypto.randomUUID();
     const congregationData = {
       id: congregationId,
-      name: formData.get('name') as string,
-      category: formData.get('category') as string,
-      address: formData.get('address') as string,
-      cep: formData.get('cep') as string,
-      city: formData.get('city') as string,
-      state: formData.get('state') as string,
+      name: fd.get('name') as string,
+      category: fd.get('category') as string,
+      address: fd.get('address') as string,
+      cep: fd.get('cep') as string,
+      city: fd.get('city') as string,
+      state: fd.get('state') as string,
     };
-
-    const { error: congError } = await supabase.from('congregations').upsert(congregationData);
-    if (congError) {
-      alert('Erro ao salvar congregação: ' + congError.message);
-      return;
-    }
-
-    // Save Service Days
-    if (selectedCongregation) {
-      await supabase.from('service_days').delete().eq('congregation_id', congregationId);
-    }
-    for (const sd of tempServiceDays) {
-      if (sd.day && sd.time) {
-        await supabase.from('service_days').insert({
-          congregation_id: congregationId,
-          day: sd.day,
-          time: sd.time
-        });
+    try {
+      await congregationsService.upsertCongregation(congregationData);
+      if (selectedCongregation) {
+        await congregationsService.replaceServiceDays(congregationId, tempServiceDays);
+        await congregationsService.replaceMinistry(congregationId, tempMinistry);
+      } else {
+        await congregationsService.replaceServiceDays(congregationId, tempServiceDays);
+        await congregationsService.replaceMinistry(congregationId, tempMinistry);
       }
+      await refreshCongregations();
+      setIsCreatingCongregation(false);
+      setSelectedCongregation(null);
+      showToast(selectedCongregation ? 'Congregação atualizada!' : 'Congregação cadastrada!', 'success');
+    } catch (err) {
+      showToast('Erro ao salvar congregação: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
-
-    // Save Ministry
-    if (selectedCongregation) {
-      await supabase.from('ministry').delete().eq('congregation_id', congregationId);
-    }
-    for (const m of tempMinistry) {
-      if (m.role && m.name) {
-        await supabase.from('ministry').insert({
-          congregation_id: congregationId,
-          role: m.role,
-          name: m.name,
-          profile_id: m.profileId
-        });
-      }
-    }
-
-    await fetchInitialData();
-    setIsCreatingCongregation(false);
-    setSelectedCongregation(null);
-    alert(selectedCongregation ? 'Congregação atualizada!' : 'Congregação cadastrada!');
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -475,2078 +426,391 @@ export default function App() {
   };
 
   const onCropComplete = (croppedImage: string) => {
-    setUserProfile(prev => prev ? { ...prev, photoUrl: croppedImage } : {
-      id: '', // Add required id
-      role: 'USER', // Add required role
-      name: '',
-      email: '',
-      phone: '',
-      instrument: 'Violino',
-      photoUrl: croppedImage,
-      congregation: '' // Add default
-    });
-    setFormData(prev => ({ ...prev, photoUrl: croppedImage }));
+    setUserProfile((prev) =>
+      prev
+        ? { ...prev, photoUrl: croppedImage }
+        : { id: '', role: 'USER' as UserRole, name: '', email: '', phone: '', instrument: 'Violino', photoUrl: croppedImage, congregation: '', congregationId: '' }
+    );
+    setFormData((prev) => ({ ...prev, photoUrl: croppedImage }));
     setIsCropping(false);
     setImageToCrop(null);
   };
 
   const handleSaveProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log('Salvando perfil...', formData);
+    logger.log('Salvando perfil...', formData);
     if (isGuest || !session?.user) {
-      alert('Faça login para salvar seu perfil permanentemente.');
+      showToast('Faça login para salvar seu perfil permanentemente.', 'warning');
       return;
     }
-
-    const userId = session.user.id;
-    const userEmail = session.user.email;
-
     const profileToSave = {
-      id: userId,
-      email: userEmail,
+      id: session.user.id,
+      email: session.user.email,
       name: formData.name,
       phone: formData.phone,
       instrument: formData.instrument,
       congregation: formData.congregation,
       congregation_id: formData.congregationId,
       photo_url: formData.photoUrl,
-      role: userProfile?.role || 'USER'
+      role: userProfile?.role || 'USER',
     };
-
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(profileToSave);
-
-    if (error) alert('Erro ao salvar: ' + error.message);
-    else {
-      setUserProfile({
-        ...userProfile,
+    try {
+      await profilesService.upsertProfile(profileToSave);
+      setUserProfile((prev) => ({
+        ...prev,
+        id: profileToSave.id,
+        email: profileToSave.email || '',
+        role: (profileToSave.role as UserRole) || UserRole.USER,
         name: profileToSave.name,
         phone: profileToSave.phone,
         instrument: profileToSave.instrument,
         congregation: profileToSave.congregation,
         congregationId: profileToSave.congregation_id,
-        photoUrl: profileToSave.photo_url
-      });
+        photoUrl: profileToSave.photo_url,
+      }));
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err) {
+      showToast('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Erro ao sair:', error.message);
-        // Mesmo com erro no server, forçamos a limpeza local
-      }
+      await supabase.auth.signOut();
     } catch (err) {
-      console.error('Erro inesperado no logout:', err);
+      logger.error('Erro inesperado no logout:', err);
     } finally {
-      // Limpeza garantida do estado local
       setSession(null);
       setUserProfile(null);
-      setIsGuest(false);
+      exitGuest();
       setActiveTab('dashboard');
     }
   };
 
-  const deleteConductor = async (id: string) => {
+  const handleDeleteConductor = async (id: string) => {
     if (confirm('Deseja realmente excluir este perfil?')) {
-      const { error } = await supabase.from('conductors').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
+      try {
+        await conductorsService.deleteConductor(id);
+        await refreshConductors();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
     }
   };
 
-  const deleteCongregation = async (id: string) => {
+  const handleDeleteCongregation = async (id: string) => {
     if (confirm('Deseja realmente excluir esta congregação?')) {
-      const { error } = await supabase.from('congregations').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
+      try {
+        await congregationsService.deleteCongregation(id);
+        await refreshCongregations();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
     }
   };
 
-  // --- Config CRUD Functions ---
-  const addCategory = async (name: string) => {
-    if (!name) return;
-    if (editingCategory) {
-      const { error } = await supabase.from('congregation_categories').update({ name }).eq('id', editingCategory.id);
-      if (!error) {
-        setEditingCategory(null);
-        await fetchInitialData();
-      } else alert('Erro ao atualizar categoria: ' + error.message);
-    } else {
-      const { error } = await supabase.from('congregation_categories').insert({ name });
-      if (!error) await fetchInitialData();
-      else alert('Erro ao adicionar categoria: ' + error.message);
-    }
-  };
-
-  const deleteCategory = async (id: number) => {
-    if (confirm('Deseja realmente excluir esta categoria?')) {
-      const { error } = await supabase.from('congregation_categories').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
-    }
-  };
-
-  const addRole = async (name: string) => {
-    if (!name) return;
-    if (editingRole) {
-      const { error } = await supabase.from('ministry_roles').update({ name }).eq('id', editingRole.id);
-      if (!error) {
-        setEditingRole(null);
-        await fetchInitialData();
-      } else alert('Erro ao atualizar cargo: ' + error.message);
-    } else {
-      const { error } = await supabase.from('ministry_roles').insert({ name });
-      if (!error) await fetchInitialData();
-      else alert('Erro ao adicionar cargo: ' + error.message);
-    }
-  };
-
-  const addEventType = async (name: string, value: string, color: string, textColor: string) => {
-    if (!name || !value) return;
-    const payload = { name, value, color, text_color: textColor };
-
-    if (editingEventType) {
-      const { error } = await supabase.from('event_types').update(payload).eq('id', editingEventType.id);
-      if (!error) {
-        setEditingEventType(null);
-        await fetchInitialData();
-      } else alert('Erro ao atualizar tipo: ' + error.message);
-    } else {
-      const { error } = await supabase.from('event_types').insert(payload);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao adicionar tipo: ' + error.message);
-    }
-  };
-
-  const deleteEventType = async (id: number) => {
-    if (confirm('Deseja realmente excluir este tipo de evento?')) {
-      const { error } = await supabase.from('event_types').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
-    }
-  };
-
-  const deleteRole = async (id: number) => {
-    if (confirm('Deseja realmente excluir este cargo?')) {
-      const { error } = await supabase.from('ministry_roles').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
-    }
-  };
-
-
-
-  const deletePresence = async (id: string) => {
+  const handleDeletePresence = async (id: string) => {
     if (confirm('Deseja realmente remover esta confirmação?')) {
-      const { error } = await supabase.from('presences').delete().eq('id', id);
-      if (!error) await fetchInitialData();
-      else alert('Erro ao excluir: ' + error.message);
+      try {
+        await presencesService.deletePresence(id);
+        await refreshPresences();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
     }
   };
 
-  const deleteEvent = (event: RehearsalEvent) => {
+  const openDeleteEventModal = (event: RehearsalEvent) => {
     setEventToDelete(event);
     setIsDeletingEvent(true);
   };
 
   const confirmDeleteEvent = async () => {
     if (!eventToDelete) return;
-
-    setIsLoading(true);
     try {
-      const { error } = await supabase.from('events').delete().eq('id', eventToDelete.id);
-      if (!error) {
-        await fetchInitialData();
-        setIsDeletingEvent(false);
-        setEventToDelete(null);
-      } else {
-        alert('Erro ao excluir evento: ' + error.message);
-      }
+      await eventsService.deleteEvent(eventToDelete.id);
+      await refreshEvents();
+      setIsDeletingEvent(false);
+      setEventToDelete(null);
+      showToast('Evento excluído com sucesso.', 'success');
     } catch (err) {
-      console.error('Erro na exclusão:', err);
-      alert('Ocorreu um erro inesperado ao excluir o evento.');
-    } finally {
-      setIsLoading(false);
+      logger.error('Erro na exclusão:', err);
+      showToast('Ocorreu um erro inesperado ao excluir o evento.', 'error');
     }
   };
 
-  const toggleCancelEvent = async (event: RehearsalEvent) => {
-    const { error } = await supabase.from('events').update({ canceled: !event.canceled }).eq('id', event.id);
-    if (!error) await fetchInitialData();
-    else alert('Erro ao alterar status: ' + error.message);
+  const handleToggleCancelEvent = async (event: RehearsalEvent) => {
+    try {
+      await eventsService.updateEventStatus(event.id, !event.canceled);
+      await refreshEvents();
+    } catch (err) {
+      showToast('Erro ao alterar status: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    }
   };
 
-  const isConductorDisabled = [EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(creatingEventType);
-
-  const updateUserProfile = async (userId: string, updates: Partial<UserProfile>) => {
-    console.log('updateUserProfile called:', { userId, updates });
+  const updateUserProfile = async (
+    userId: string,
+    updates: Partial<UserProfile> & { congregation_id?: string | null }
+  ) => {
+    logger.log('updateUserProfile called:', { userId, updates });
     try {
-      const { data, error } = await supabase.from('profiles').update(updates).eq('id', userId).select();
-
-      if (error) {
-        console.error('Erro ao atualizar perfil:', error);
-        throw error;
-      }
-
-      console.log('Update result:', data);
-
+      const data = await profilesService.updateProfile(userId, updates as Record<string, unknown>);
       if (!data || data.length === 0) {
-        console.warn('Nenhum perfil atualizado - Verifique RLS ou ID');
-        alert('Atenção: A alteração não foi salva. Verifique se você tem permissão de Administrador.');
+        showToast('Atenção: A alteração não foi salva. Verifique se você tem permissão de Administrador.', 'warning');
       } else {
-        console.log('Perfil atualizado com sucesso!');
-        await fetchInitialData();
+        await refreshProfiles();
       }
-    } catch (err: any) {
-      alert('Erro ao atualizar usuário: ' + err.message);
+    } catch (err: unknown) {
+      showToast('Erro ao atualizar usuário: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
   const handleDeleteMember = async (profile: UserProfile) => {
-    console.log('handleDeleteMember called with profile:', profile);
     try {
-      const { data, error, count } = await supabase.from('profiles').delete().eq('id', profile.id).select();
-      console.log('Delete result:', { data, error, count });
-      if (error) {
-        console.error('Delete error:', error);
-        throw error;
-      }
+      const data = await profilesService.deleteProfile(profile.id);
       if (!data || data.length === 0) {
-        console.warn('No rows deleted - possible RLS restriction');
-        alert('Não foi possível excluir o membro. Verifique suas permissões ou as políticas de segurança do banco de dados.');
+        showToast('Não foi possível excluir o membro. Verifique suas permissões.', 'warning');
         return;
       }
-      await fetchInitialData();
+      await refreshProfiles();
       setIsDeletingMember(false);
       setMemberToDelete(null);
-      console.log('Member deleted successfully');
-    } catch (err: any) {
-      console.error('Delete catch error:', err);
-      alert('Erro ao excluir membro: ' + err.message);
+    } catch (err: unknown) {
+      showToast('Erro ao excluir membro: ' + (err instanceof Error ? err.message : String(err)), 'error');
     }
   };
 
+  // Config CRUD
+  const addCategory = async (name: string) => {
+    try {
+      if (editingCategory) {
+        await configService.updateCategory(editingCategory.id, name);
+        setEditingCategory(null);
+      } else {
+        await configService.insertCategory(name);
+      }
+      await refreshConfig();
+    } catch (err) {
+      showToast('Erro ao salvar categoria: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    }
+  };
+
+  const deleteCategory = async (id: number) => {
+    if (confirm('Deseja realmente excluir esta categoria?')) {
+      try {
+        await configService.deleteCategory(id);
+        await refreshConfig();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
+    }
+  };
+
+  const addRole = async (name: string) => {
+    try {
+      if (editingRole) {
+        await configService.updateRole(editingRole.id, name);
+        setEditingRole(null);
+      } else {
+        await configService.insertRole(name);
+      }
+      await refreshConfig();
+    } catch (err) {
+      showToast('Erro ao salvar cargo: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    }
+  };
+
+  const deleteRole = async (id: number) => {
+    if (confirm('Deseja realmente excluir este cargo?')) {
+      try {
+        await configService.deleteRole(id);
+        await refreshConfig();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
+    }
+  };
+
+  const addEventType = async (name: string, value: string, color: string, textColor: string) => {
+    if (!name || !value) return;
+    const payload = { name, value, color, text_color: textColor };
+    try {
+      if (editingEventType) {
+        await configService.updateEventType(editingEventType.id, payload);
+        setEditingEventType(null);
+      } else {
+        await configService.insertEventType(payload);
+      }
+      await refreshConfig();
+    } catch (err) {
+      showToast('Erro ao salvar tipo: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    }
+  };
+
+  const deleteEventType = async (id: number) => {
+    if (confirm('Deseja realmente excluir este tipo de evento?')) {
+      try {
+        await configService.deleteEventType(id);
+        await refreshConfig();
+      } catch (err) {
+        showToast('Erro ao excluir: ' + (err instanceof Error ? err.message : String(err)), 'error');
+      }
+    }
+  };
+
+  // ── Guard ─────────────────────────────────────────────────────
   if (!session && !isGuest) {
-    return <Auth onGuestAccess={() => setIsGuest(true)} />;
+    return <Auth onGuestAccess={enterGuest} />;
   }
 
   return (
     <div className="pb-24 flex flex-col min-h-screen selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} user={userProfile} />
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      {isLoading ? (
-        <div className="flex-grow flex items-center justify-center p-20">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Carregando dados...</p>
+      <main className="max-w-6xl mx-auto w-full flex-grow">
+        <Suspense fallback={
+          <div className="flex-grow flex items-center justify-center p-20">
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           </div>
-        </div>
-      ) : (
-        <main className="max-w-6xl mx-auto w-full flex-grow">
+        }>
 
-          {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
-            <div className="animate-in fade-in duration-500">
-              <div className="bg-indigo-600 pt-16 pb-40 px-4 text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full overflow-hidden opacity-10 pointer-events-none">
-                  <div className="absolute -top-10 -left-10 w-64 h-64 rounded-full border-[20px] border-white"></div>
-                  <div className="absolute bottom-10 right-10 w-96 h-96 rounded-full border-[30px] border-white"></div>
-                </div>
-
-                <div className="relative z-10 max-w-3xl mx-auto space-y-4">
-                  <div className="inline-flex items-center justify-center p-4 bg-white/10 backdrop-blur-md rounded-2xl text-white mb-2">
-                    <Music size={32} strokeWidth={2.5} />
-                  </div>
-                  <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">Calendário de Eventos CCB - {new Date().getFullYear()}</h1>
-                  <p className="text-indigo-100 font-medium text-sm md:text-base max-w-md mx-auto">
-                    Confirme sua presença e adicione os ensaio ao seu Google Agenda com apenas um clique.
-                  </p>
-
-                  <div className="mt-10 max-w-2xl mx-auto relative group">
-                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={24} />
-                    <input
-                      type="text"
-                      placeholder="Buscar por local ou encarregado..."
-                      value={globalSearch}
-                      onChange={(e) => setGlobalSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-200 shadow-2xl rounded-full py-6 pl-16 pr-8 text-slate-800 outline-none focus:ring-8 focus:ring-white/10 focus:border-indigo-500/20 transition-all font-semibold placeholder:text-slate-300 text-lg md:text-xl"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 -mt-16 relative z-20">
-                <div className="max-w-6xl mx-auto space-y-6">
-                  {/* Row 1: 2 Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <DashboardStatCard
-                      title="Total Geral de Eventos"
-                      total={stats.total.total}
-                      remaining={stats.total.remaining}
-                      icon={<CalendarPlus size={20} />}
-                      iconBg="bg-slate-800"
-                    />
-                    <DashboardStatCard
-                      title="Ensaios (Local/Reg)"
-                      total={stats.rehearsals.total}
-                      remaining={stats.rehearsals.remaining}
-                      icon={<Calendar size={20} />}
-                      iconBg="bg-indigo-500"
-                    />
-                  </div>
-                  {/* Row 2: 3 Cards */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <DashboardStatCard
-                      title="Cultos de Batismo"
-                      total={stats.baptisms.total}
-                      remaining={stats.baptisms.remaining}
-                      icon={<Droplets size={20} />}
-                      iconBg="bg-sky-500"
-                      variant="card"
-                    />
-                    <DashboardStatCard
-                      title="Reuniões Mocidade"
-                      total={stats.youth.total}
-                      remaining={stats.youth.remaining}
-                      icon={<Users size={20} />}
-                      iconBg="bg-rose-500"
-                      variant="card"
-                    />
-                    <DashboardStatCard
-                      title="Busca de Dons"
-                      total={stats.gifts.total}
-                      remaining={stats.gifts.remaining}
-                      icon={<Sparkles size={20} />}
-                      iconBg="bg-purple-500"
-                      variant="card"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-4 mt-12 space-y-12 max-w-5xl mx-auto pb-12">
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                      <Sparkles size={20} className="text-amber-500" /> Próximos Eventos em Destaque
-                    </h3>
-                    <button
-                      onClick={() => setActiveTab('events')}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-full transition-all flex items-center gap-1 group"
-                    >
-                      Ver Todos <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {dashboardData.largeEvents.length > 0 ? (
-                      dashboardData.largeEvents.map(event => (
-                        <LargeEventCard
-                          key={event.id}
-                          event={event}
-                          onConfirm={() => { setSelectedEvent(event); setIsConfirming(true); }}
-                          allTypes={eventTypeList}
-                        />
-                      ))
-                    ) : (
-                      <p className="text-slate-400 text-sm italic col-span-full text-center py-8 bg-white rounded-3xl border border-dashed border-slate-200">
-                        Nenhum evento encontrado para os critérios de busca.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Calendar size={20} className="text-indigo-600" /> Seguintes na Agenda
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {dashboardData.smallEvents.length > 0 ? (
-                      dashboardData.smallEvents.map(event => (
-                        <EventSummaryCard
-                          key={event.id}
-                          event={event}
-                          onClick={() => { setSelectedEvent(event); setIsConfirming(true); }}
-                          allTypes={eventTypeList}
-                        />
-                      ))
-                    ) : (
-                      dashboardData.largeEvents.length > 0 && (
-                        <p className="text-slate-400 text-sm italic col-span-full opacity-60 text-center py-4">Aguardando novos agendamentos...</p>
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <DashboardPage
+              dashboardData={dashboardData}
+              stats={stats}
+              isLoading={isLoading}
+              globalSearch={globalSearch}
+              setGlobalSearch={setGlobalSearch}
+              eventTypeList={eventTypeList}
+              setActiveTab={setActiveTab}
+              onConfirmEvent={(event) => { setSelectedEvent(event); setIsConfirming(true); }}
+            />
           )}
 
-          {/* EVENTS TAB */}
           {activeTab === 'events' && (
-            <div className="px-4 mt-8 space-y-6 animate-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
-              <header className="space-y-4">
-                <div>
-                  <h1 className="text-3xl font-black text-slate-800 tracking-tight">Cronograma {new Date().getFullYear()}</h1>
-                  <p className="text-slate-500 font-medium">Explore e filtre todos os eventos planejados para o ano.</p>
-                </div>
-
-                <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                    <Filter size={18} />
-                    <span className="text-sm font-bold uppercase tracking-widest">Filtros Avançados</span>
-                    {hasActiveFilters && (
-                      <button onClick={clearFilters} className="ml-auto text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
-                        <RotateCcw size={14} /> Redefinir
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Mês</label>
-                      <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        <option value="Todos">Todos</option>
-                        {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Local</label>
-                      <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Encarregado</label>
-                      <select value={conductorFilter} onChange={(e) => setConductorFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        {uniqueConductors.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Tipo</label>
-                      <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                        {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </header>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-12">
-                {filteredEvents.map((event) => {
-                  const styles = getTypeStyles(event.type, eventTypeList);
-                  const isPast = event.fullDate < today;
-                  return (
-                    <div key={event.id} className={`bg-white border ${event.canceled || isPast ? 'opacity-50 grayscale-[0.5]' : 'border-slate-100'} p-6 rounded-[2rem] shadow-sm hover:shadow-xl transition-all relative overflow-hidden group`}>
-                      <div className="flex justify-between items-start mb-4">
-                        <span
-                          className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] ${styles.bg} ${styles.text}`}
-                          style={styles.isHex ? { backgroundColor: `${styles.hex}20`, color: styles.hex } : {}}
-                        >
-                          {event.type}
-                        </span>
-                        <span className="text-slate-400 text-sm font-bold">{event.day} {event.month}</span>
-                      </div>
-
-                      <h3 className={`text-xl font-black tracking-tight ${event.canceled ? 'line-through text-slate-400' : 'text-slate-800'}`}>{event.location}</h3>
-                      <div className="mt-3 space-y-2 text-slate-500 text-sm">
-                        <p className="flex items-center gap-2 font-medium">
-                          <Layout size={16} className={styles.text} style={styles.isHex ? { color: styles.hex } : {}} /> {event.time}
-                        </p>
-                        <p className="flex items-center gap-2 font-medium">
-                          <User size={16} className={styles.text} style={styles.isHex ? { color: styles.hex } : {}} /> {event.conductor}
-                        </p>
-                      </div>
-
-                      {!event.canceled && !isPast && (
-                        <div className="mt-6 flex flex-wrap gap-2">
-                          <button
-                            onClick={() => { setSelectedEvent(event); setIsConfirming(true); }}
-                            className={`text-white text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 active:scale-95 transition-all shadow-lg ${styles.card}`}
-                            style={styles.isHex ? { backgroundColor: styles.hex } : {}}
-                          >
-                            <CheckCircle size={14} /> Confirmar Presença
-                          </button>
-                          <a href={getGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer" className="bg-slate-100 text-slate-700 text-xs font-black px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-slate-200 transition-colors">
-                            <CalendarPlus size={14} /> Agendar
-                          </a>
-                        </div>
-                      )}
-                      {event.canceled && <p className="mt-4 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] bg-red-50 px-3 py-1 rounded-lg w-fit">Cancelado</p>}
-                      {isPast && !event.canceled && <p className="mt-4 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] bg-slate-50 px-3 py-1 rounded-lg w-fit">Encerrado</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <EventsPage
+              filteredEvents={filteredEvents}
+              eventTypeList={eventTypeList}
+              monthFilter={monthFilter}
+              setMonthFilter={setMonthFilter}
+              conductorFilter={conductorFilter}
+              setConductorFilter={setConductorFilter}
+              locationFilter={locationFilter}
+              setLocationFilter={setLocationFilter}
+              typeFilter={typeFilter}
+              setTypeFilter={setTypeFilter}
+              uniqueConductors={uniqueConductors}
+              uniqueLocations={uniqueLocations}
+              eventTypes={eventTypes}
+              hasActiveFilters={hasActiveFilters}
+              clearFilters={clearFilters}
+              today={today}
+              onConfirmEvent={(event) => { setSelectedEvent(event); setIsConfirming(true); }}
+            />
           )}
 
-          {/* PROFILE TAB */}
           {activeTab === 'profile' && (
-            <div className="px-4 mt-8 space-y-8 animate-in slide-in-from-top-4 duration-500 max-w-2xl mx-auto pb-12">
-              <header className="text-center space-y-2">
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">Meu Perfil</h1>
-                <p className="text-slate-500 font-medium">Mantenha seus dados atualizados para sincronização automática.</p>
-              </header>
+            <ProfilePage
+              userProfile={userProfile}
+              isGuest={isGuest}
+              setIsGuest={exitGuest}
+              formData={formData}
+              setFormData={setFormData}
+              showSuccess={showSuccess}
+              congregations={congregations}
+              fileInputRef={fileInputRef}
+              onSaveProfile={handleSaveProfile}
+              onLogout={handleLogout}
+              onFileSelect={handleFileSelect}
+            />
+          )}
 
-              <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden">
-                <div className="p-8 bg-indigo-600 flex flex-col items-center gap-4 relative">
-                  {isGuest && (
-                    <div className="absolute top-4 right-4 animate-bounce">
-                      <button
-                        onClick={() => setIsGuest(false)}
-                        className="bg-white/20 hover:bg-white/30 text-white text-[10px] font-black px-4 py-2 rounded-full border border-white/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-2"
-                      >
-                        <UserPlus size={12} /> Criar Conta
-                      </button>
-                    </div>
-                  )}
-                  <div className="relative group">
-                    <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center border-4 border-white/30 overflow-hidden shadow-2xl">
-                      {userProfile?.photoUrl ? (
-                        <img src={userProfile.photoUrl} className="w-full h-full object-cover" alt="Foto" />
-                      ) : (
-                        <User size={40} className="text-white" />
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={isGuest}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12 ${isGuest ? 'opacity-30 cursor-not-allowed' : ''}`}
-                    >
-                      <Camera size={18} strokeWidth={2.5} />
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileSelect}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                  </div>
-                  <div className="text-center">
-                    <h2 className="text-white text-xl font-bold tracking-tight leading-none">{isGuest ? 'Visualizando como Visitante' : (userProfile?.name || 'Seu Nome')}</h2>
-                    <p className="text-white/60 text-xs font-medium uppercase tracking-widest mt-1">{isGuest ? 'Acesso Limitado' : (userProfile?.instrument || 'Instrumento')}</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSaveProfile} className={`p-8 space-y-6 ${isGuest ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {isGuest && (
-                    <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-3 mb-4">
-                      <Info className="text-amber-500" size={20} />
-                      <p className="text-xs font-medium text-amber-700">Como visitante, suas edições no perfil não serão salvas. <button onClick={() => setIsGuest(false)} className="underline font-black">Crie uma conta</button> para gerenciar seu perfil musical.</p>
-                    </div>
-                  )}
-
-                  {showSuccess && (
-                    <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3 mb-4 animate-in slide-in-from-top-2">
-                      <CheckCircle className="text-emerald-500" size={20} />
-                      <p className="text-xs font-bold text-emerald-700">Perfil atualizado com sucesso!</p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome Completo
-                      </label>
-                      <input
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        type="text"
-                        placeholder="Como quer ser chamado?"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Phone size={14} /> WhatsApp
-                      </label>
-                      <input
-                        required
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        type="tel"
-                        placeholder="(00) 00000-0000"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Music size={14} /> Instrumento Principal
-                      </label>
-                      <select
-                        disabled={userProfile?.role !== 'MUSICIAN' && userProfile?.role !== 'ADMIN'}
-                        value={formData.instrument}
-                        onChange={(e) => setFormData({ ...formData, instrument: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                      >
-                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
-                      {userProfile?.role !== 'MUSICIAN' && userProfile?.role !== 'ADMIN' && (
-                        <p className="text-[9px] text-amber-600 font-bold uppercase tracking-wider ml-1 mt-1 flex items-center gap-1">
-                          <Info size={10} /> Solicite ao administrador para alterar seu instrumento
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <MapPin size={14} /> Congregação Comum
-                      </label>
-                      <select
-                        value={formData.congregationId}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          const selected = congregations.find(c => c.id === id);
-                          setFormData({
-                            ...formData,
-                            congregationId: id,
-                            congregation: selected ? selected.name : ''
-                          });
-                        }}
-                        className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold appearance-none cursor-pointer"
-                        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'org.lucide.chevron-down\' /%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1.25rem center', backgroundSize: '1.5rem' }}
-                      >
-                        <option value="">Selecione sua congregação...</option>
-                        {congregations.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                      <Camera size={14} /> URL da Foto de Perfil
-                    </label>
-                    <input
-                      value={formData.photoUrl}
-                      onChange={(e) => setFormData({ ...formData, photoUrl: e.target.value })}
-                      type="text"
-                      placeholder="https://link-da-sua-foto.jpg ou Upload..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="pt-4 flex gap-3">
-                    {!isGuest && (
-                      <button
-                        type="submit"
-                        disabled={showSuccess}
-                        className={`flex-1 font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all ${showSuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                      >
-                        {showSuccess ? 'Perfil Salvo!' : 'Salvar Perfil'}
-                        <CheckCircle size={20} className={showSuccess ? 'animate-bounce' : ''} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="px-6 bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 font-black text-xs"
-                    >
-                      <LogOut size={18} /> {isGuest ? 'SAIR DO MODO VISITANTE' : 'SAIR DA CONTA'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+          {activeTab === 'admin' && userProfile?.role !== 'ADMIN' && (
+            <div className="flex flex-col items-center justify-center py-32 gap-4 text-slate-400">
+              <p className="font-bold text-lg text-slate-600">Acesso Restrito</p>
+              <p className="text-sm">Você não tem permissão para acessar o painel de administração.</p>
             </div>
           )}
 
-          {/* ADMIN TAB */}
-          {activeTab === 'admin' && (
-            <div className="px-4 mt-8 space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto mb-12">
-              <header className="space-y-6">
-                <div className="border-l-4 border-indigo-600 pl-4 py-1">
-                  <h1 className="text-3xl font-black text-slate-800 tracking-tight">Painel Administrativo</h1>
-                  <p className="text-slate-500 font-medium">Gestão centralizada do sistema 2026.</p>
-                </div>
+          {activeTab === 'admin' && userProfile?.role === 'ADMIN' && (
+            <AdminPage
+              adminSubTab={adminSubTab}
+              setAdminSubTab={setAdminSubTab}
+              events={events}
+              conductors={conductors}
+              congregations={congregations}
+              presences={presences}
+              categories={categories}
+              roles={roles}
+              eventTypeList={eventTypeList}
+              allProfiles={allProfiles}
+              monthFilter={monthFilter}
+              setMonthFilter={setMonthFilter}
+              conductorFilter={conductorFilter}
+              setConductorFilter={setConductorFilter}
+              locationFilter={locationFilter}
+              setLocationFilter={setLocationFilter}
+              typeFilter={typeFilter}
+              setTypeFilter={setTypeFilter}
+              filteredEvents={filteredEvents}
+              filteredPresences={filteredPresences}
+              filteredCongregations={filteredCongregations}
+              uniqueConductors={uniqueConductors}
+              uniqueLocations={uniqueLocations}
+              eventTypes={eventTypes}
+              memberSearch={memberSearch}
+              setMemberSearch={setMemberSearch}
+              congregationSearch={congregationSearch}
+              setCongregationSearch={setCongregationSearch}
+              presenceSearch={presenceSearch}
+              setPresenceSearch={setPresenceSearch}
+              hasActiveFilters={hasActiveFilters}
+              clearFilters={clearFilters}
+              editingCategory={editingCategory}
+              setEditingCategory={setEditingCategory}
+              editingRole={editingRole}
+              setEditingRole={setEditingRole}
+              editingEventType={editingEventType}
+              setEditingEventType={setEditingEventType}
+              onNewEvent={() => { setSelectedEvent(null); setCreatingEventType(EventType.LOCAL); setIsCreatingEvent(true); }}
+              onEditEvent={(event) => { setSelectedEvent(event); setCreatingEventType(event.type); setIsCreatingEvent(true); }}
+              onNewConductor={() => { setSelectedConductor(null); setIsCreatingConductor(true); }}
+              onEditConductor={(conductor) => { setSelectedConductor(conductor); setIsCreatingConductor(true); }}
+              onNewCongregation={() => {
+                setSelectedCongregation(null);
+                setTempServiceDays([{ day: '', time: '19:30' }]);
+                setTempMinistry([{ role: '', name: '' }]);
+                setIsCreatingCongregation(true);
+              }}
+              onEditCongregation={(cong) => {
+                setSelectedCongregation(cong);
+                setTempServiceDays(cong.serviceDays.length ? cong.serviceDays : [{ day: '', time: '19:30' }]);
+                setTempMinistry(cong.ministry.length ? cong.ministry : [{ role: '', name: '' }]);
+                setIsCreatingCongregation(true);
+              }}
+              onEditMember={(profile) => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
+              onDeleteMember={(profile) => { setMemberToDelete(profile); setIsDeletingMember(true); }}
+              onToggleCancelEvent={handleToggleCancelEvent}
+              onDeleteEvent={openDeleteEventModal}
+              onDeleteConductor={handleDeleteConductor}
+              onDeleteCongregation={handleDeleteCongregation}
+              onDeletePresence={handleDeletePresence}
+              onUpdateUserProfile={updateUserProfile}
+              onAddCategory={addCategory}
+              onDeleteCategory={deleteCategory}
+              onAddRole={addRole}
+              onDeleteRole={deleteRole}
+              onAddEventType={addEventType}
+              onDeleteEventType={deleteEventType}
+            />
+          )}
 
-                {/* Responsive Admin Menu */}
+          {activeTab === 'ia' && !isGuest && (
+            <AiPage userProfile={userProfile} statsSummary={null} />
+          )}
 
-                {/* Mobile View: Floating Pills */}
-                <div className="md:hidden overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 flex gap-2 snap-x">
-                  <button
-                    onClick={() => setAdminSubTab('events')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'events' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <Calendar size={14} /> EVENTOS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('congregations')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'congregations' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <Landmark size={14} /> CONGREGAÇÕES
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('conductors')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'conductors' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <Users size={14} /> ENCARREGADOS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('confirmations')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'confirmations' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <CheckCircle size={14} /> CONFIRMAÇÕES
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('users')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'users' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <UserPlus size={14} /> MEMBROS
-                  </button>
-                  <button
-                    onClick={() => setAdminSubTab('settings')}
-                    className={`flex-none snap-center px-4 py-2.5 rounded-full text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 border shadow-sm ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-300 shadow-md scale-105' : 'bg-white text-slate-500 border-slate-200'}`}
-                  >
-                    <Settings size={14} /> CONFIGS
-                  </button>
-                </div>
-
-                {/* Desktop View: Original Container Layout */}
-                <div className="hidden md:block relative">
-                  <div className="bg-white border border-slate-100 p-1.5 rounded-[1.5rem] shadow-sm flex overflow-x-auto no-scrollbar gap-1 w-full">
-                    <button
-                      onClick={() => setAdminSubTab('events')}
-                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'events' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <Calendar size={14} /> EVENTOS
-                    </button>
-                    <button
-                      onClick={() => setAdminSubTab('congregations')}
-                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'congregations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <Landmark size={14} /> CONGREGAÇÕES
-                    </button>
-                    <button
-                      onClick={() => setAdminSubTab('conductors')}
-                      className={`flex-none min-w-[140px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'conductors' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <Users size={14} /> ENCARREGADOS
-                    </button>
-                    <button
-                      onClick={() => setAdminSubTab('confirmations')}
-                      className={`flex-none min-w-[140px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'confirmations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <CheckCircle size={14} /> CONFIRMAÇÕES
-                    </button>
-                    <button
-                      onClick={() => setAdminSubTab('users')}
-                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <UserPlus size={14} /> MEMBROS
-                    </button>
-                    <button
-                      onClick={() => setAdminSubTab('settings')}
-                      className={`flex-none min-w-[120px] px-5 py-3 rounded-xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2 ${adminSubTab === 'settings' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <Settings size={14} /> CONFIGS
-                    </button>
-                  </div>
-                </div>
-              </header>
-
-              {/* TAB: EVENTOS */}
-              {adminSubTab === 'events' && (
-                <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Cronograma</h3>
-                    <button
-                      onClick={() => setIsCreatingEvent(true)}
-                      className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
-                    >
-                      <Plus size={16} /> NOVO EVENTO
-                    </button>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-                    <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                      <Filter size={18} />
-                      <span className="text-sm font-bold uppercase tracking-widest">Filtrar Base</span>
-                      {hasActiveFilters && (
-                        <button onClick={clearFilters} className="ml-auto text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center gap-1 transition-colors">
-                          <RotateCcw size={14} /> Limpar
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Mês</label>
-                        <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                          <option value="Todos">Todos</option>
-                          {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Local</label>
-                        <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                          {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Encarregado</label>
-                        <select value={conductorFilter} onChange={(e) => setConductorFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                          {uniqueConductors.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 tracking-widest">Tipo</label>
-                        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
-                          {eventTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
-                    <div className="overflow-x-auto no-scrollbar">
-                      <table className="w-full text-left">
-                        <thead>
-                          <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                            <th className="px-6 py-5">Local/Data</th>
-                            <th className="px-6 py-5">Categoria</th>
-                            <th className="px-6 py-5">Estado</th>
-                            <th className="px-6 py-5 text-right">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-sm divide-y divide-slate-50">
-                          {filteredEvents.map((event) => (
-                            <tr key={event.id} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="px-6 py-5">
-                                <span className="font-bold block text-slate-800 tracking-tight leading-tight">{event.location}</span>
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter italic">{event.day.split(' ')[0]} {event.month} • {event.time}</span>
-                              </td>
-                              <td className="px-6 py-5">
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${getTypeStyles(event.type).bg} ${getTypeStyles(event.type).text}`}>
-                                  {event.type}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5">
-                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest ${event.canceled ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                  {event.canceled ? 'OFF' : 'ON'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-5 text-right">
-                                <div className="flex justify-end gap-2">
-                                  <button onClick={() => toggleCancelEvent(event)} className={`p-2.5 rounded-xl transition-all ${event.canceled ? 'text-emerald-500 bg-emerald-50 hover:bg-emerald-100' : 'text-red-500 bg-red-50 hover:bg-red-100'}`}>
-                                    {event.canceled ? <CheckCircle size={18} /> : <X size={18} />}
-                                  </button>
-                                  <button onClick={() => { setSelectedEvent(event); setIsCreatingEvent(true); }} className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all">
-                                    <Edit2 size={18} />
-                                  </button>
-                                  <button onClick={() => deleteEvent(event)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-95">
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: CONGREGAÇÕES */}
-              {adminSubTab === 'congregations' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Congregações</h3>
-                    <button
-                      onClick={() => {
-                        setSelectedCongregation(null);
-                        setTempServiceDays([{ day: '', time: '19:30' }]);
-                        setTempMinistry([{ role: '', name: '' }]);
-                        setIsCreatingCongregation(true);
-                      }}
-                      className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
-                    >
-                      <Plus size={16} /> NOVA CONGREGAÇÃO
-                    </button>
-                  </div>
-
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input
-                      type="text"
-                      placeholder="Filtrar por nome ou cidade..."
-                      value={congregationSearch}
-                      onChange={(e) => setCongregationSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
-                    {filteredCongregations.map(cong => (
-                      <div key={cong.id} className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
-                        <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-2 inline-block">{cong.category}</span>
-                            <h4 className="text-2xl font-black text-slate-800 tracking-tight">{cong.name}</h4>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedCongregation(cong);
-                                setTempServiceDays(cong.serviceDays.length ? cong.serviceDays : [{ day: '', time: '19:30' }]);
-                                setTempMinistry(cong.ministry.length ? cong.ministry : [{ role: '', name: '' }]);
-                                setIsCreatingCongregation(true);
-                              }}
-                              className="p-3 bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                            <button onClick={() => deleteCongregation(cong.id)} className="p-3 bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all">
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                          <div className="space-y-4">
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={12} /> Localização</p>
-                              <p className="text-sm font-medium text-slate-600">{cong.address}</p>
-                              <p className="text-xs text-slate-400 font-bold">{cong.cep} • {cong.city}, {cong.state}</p>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Clock size={12} /> Dias de Culto</p>
-                              <div className="flex flex-wrap gap-2 pt-1">
-                                {cong.serviceDays.map((sd, i) => (
-                                  <span key={i} className="bg-slate-100 text-slate-600 text-[10px] font-black px-2.5 py-1 rounded-lg border border-slate-200 uppercase">{sd.day.slice(0, 3)} - {sd.time}</span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="space-y-1">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Briefcase size={12} /> Ministério</p>
-                              <div className="space-y-2 pt-1">
-                                {cong.ministry.map((m, i) => (
-                                  <div key={i} className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{m.role}</span>
-                                    <span className="text-sm font-black text-slate-700">{m.name}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* TAB: CONFIGURAÇÕES (CATEGORIAS E CARGOS) */}
-              {adminSubTab === 'settings' && (
-                <div className="space-y-6 animate-in fade-in duration-300 pb-12">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">Configurações Base</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* CATEGORIES SECTION */}
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                      <div className="flex items-center gap-3 text-indigo-600">
-                        <Filter size={20} />
-                        <h4 className="font-black uppercase tracking-widest text-xs">Categorias de Congregação</h4>
-                      </div>
-
-                      <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const name = (e.currentTarget.elements.namedItem('catName') as HTMLInputElement).value;
-                        addCategory(name);
-                        e.currentTarget.reset();
-                      }} className="flex gap-2">
-                        <input
-                          key={editingCategory?.id || 'new'}
-                          name="catName"
-                          required
-                          type="text"
-                          defaultValue={editingCategory?.name || ''}
-                          placeholder="Ex: CENTRAL"
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                        />
-                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase">
-                          {editingCategory ? 'Salvar' : 'ADD'}
-                        </button>
-                        {editingCategory && (
-                          <button
-                            type="button"
-                            onClick={() => setEditingCategory(null)}
-                            className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-slate-200 transition-colors uppercase"
-                          >
-                            X
-                          </button>
-                        )}
-                      </form>
-
-                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
-                        {categories.map(cat => (
-                          <div key={cat.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
-                            <span className="text-sm font-bold text-slate-700">{cat.name}</span>
-                            <div className="flex gap-1">
-                              <button onClick={() => setEditingCategory(cat)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <Edit2 size={14} />
-                              </button>
-                              <button onClick={() => deleteCategory(cat.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {categories.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhuma categoria cadastrada.</p>}
-                      </div>
-                    </div>
-
-                    {/* ROLES SECTION */}
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                      <div className="flex items-center gap-3 text-indigo-600">
-                        <Briefcase size={20} />
-                        <h4 className="font-black uppercase tracking-widest text-xs">Cargos do Ministério</h4>
-                      </div>
-
-                      <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const name = (e.currentTarget.elements.namedItem('roleName') as HTMLInputElement).value;
-                        addRole(name);
-                        e.currentTarget.reset();
-                      }} className="flex gap-2">
-                        <input
-                          key={editingRole?.id || 'new'}
-                          name="roleName"
-                          required
-                          type="text"
-                          defaultValue={editingRole?.name || ''}
-                          placeholder="Ex: Ancião"
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                        />
-                        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase">
-                          {editingRole ? 'Salvar' : 'ADD'}
-                        </button>
-                        {editingRole && (
-                          <button
-                            type="button"
-                            onClick={() => setEditingRole(null)}
-                            className="bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-slate-200 transition-colors uppercase"
-                          >
-                            X
-                          </button>
-                        )}
-                      </form>
-
-                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
-                        {roles.map(r => (
-                          <div key={r.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
-                            <span className="text-sm font-bold text-slate-700">{r.name}</span>
-                            <div className="flex gap-1">
-                              <button onClick={() => setEditingRole(r)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <Edit2 size={14} />
-                              </button>
-                              <button onClick={() => deleteRole(r.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {roles.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum cargo cadastrado.</p>}
-                      </div>
-                    </div>
-
-                    {/* EVENT TYPES SECTION */}
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6 md:col-span-2">
-                      <div className="flex items-center gap-3 text-indigo-600">
-                        <List size={20} />
-                        <h4 className="font-black uppercase tracking-widest text-xs">Tipos de Evento</h4>
-                      </div>
-
-                      <form onSubmit={(e) => {
-                        e.preventDefault();
-                        const fd = new FormData(e.currentTarget);
-                        const name = fd.get('typeName') as string;
-                        const value = fd.get('typeValue') as string;
-                        const color = fd.get('typeColor') as string;
-                        const textColor = fd.get('typeTextColor') as string;
-                        addEventType(name, value, color, textColor);
-                        if (!editingEventType) e.currentTarget.reset();
-                      }} className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Nome (Ex: Ensaio Local)</label>
-                          <input
-                            key={editingEventType?.id || 'new-name'}
-                            name="typeName"
-                            required
-                            type="text"
-                            defaultValue={editingEventType?.name || ''}
-                            placeholder="Nome Visível"
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          />
-                        </div>
-                        <div className="md:col-span-1 space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Valor Interno (Ex: LOCAL)</label>
-                          <input
-                            key={editingEventType?.id || 'new-val'}
-                            name="typeValue"
-                            required
-                            type="text"
-                            defaultValue={editingEventType?.value || ''}
-                            placeholder="VALOR_INTERNO"
-                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
-                          />
-                        </div>
-                        <div className="md:col-span-1 space-y-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Cor do Evento</label>
-                          <div className="relative group">
-                            {/* DEBUG: VERIFY DEPLOYMENT */}
-                            {console.log("SELETOR VISUAL DE CORES ATIVO EM PRODUÇÃO")}
-                            <input type="hidden" name="typeColor" value={editingEventType?.color || '#2563EB'} id="typeColorInput" />
-                            <div className="grid grid-cols-7 gap-2 p-3 bg-white border border-slate-200 rounded-xl">
-                              {EVENT_COLORS.map(c => (
-                                <button
-                                  key={c.value}
-                                  type="button"
-                                  title={c.name}
-                                  onClick={() => {
-                                    const input = document.getElementById('typeColorInput') as HTMLInputElement;
-                                    if (input) input.value = c.value;
-                                    // Visual feedback hack since we don't have dedicated state for this form yet
-                                    const allBtns = document.querySelectorAll('.color-btn-visual');
-                                    allBtns.forEach(b => b.classList.remove('ring-2', 'ring-offset-2', 'ring-indigo-500'));
-                                    document.getElementById(`btn-${c.value}`)?.classList.add('ring-2', 'ring-offset-2', 'ring-indigo-500');
-                                  }}
-                                  id={`btn-${c.value}`}
-                                  className={`color-btn-visual w-6 h-6 rounded-full shadow-sm hover:scale-110 transition-transform ${editingEventType?.color === c.value ? 'ring-2 ring-offset-2 ring-indigo-500' : ''}`}
-                                  style={{ backgroundColor: c.value }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="md:col-span-1 flex items-end gap-2">
-                          <input type="hidden" name="typeTextColor" value="text-white" />
-                          <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100 uppercase h-[34px]">
-                            {editingEventType ? 'Salvar' : 'ADICIONAR'}
-                          </button>
-                          {editingEventType && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingEventType(null)}
-                              className="w-[34px] h-[34px] bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center hover:bg-slate-300"
-                            >
-                              <X size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </form>
-
-                      <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar pt-2">
-                        {eventTypeList.map(type => (
-                          <div key={type.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
-                            <div className="flex items-center gap-3">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${type.color} ${type.text_color}`}>
-                                {type.name}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">{type.value}</span>
-                            </div>
-                            <div className="flex gap-1">
-                              <button onClick={() => setEditingEventType(type)} className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <Edit2 size={14} />
-                              </button>
-                              <button onClick={() => deleteEventType(type.id)} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-all p-1.5 bg-white rounded-lg shadow-sm">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {eventTypeList.length === 0 && <p className="text-center text-[10px] text-slate-400 py-6 font-bold flex items-center justify-center gap-2 italic uppercase tracking-widest"><Info size={12} /> Nenhum tipo cadastrado.</p>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-              }
-
-              {/* TAB: MEMBROS (USUÁRIOS) */}
-              {
-                adminSubTab === 'users' && (
-                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Membros</h3>
-                      <div className="relative w-full md:w-80">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input
-                          type="text"
-                          placeholder="Buscar usuário..."
-                          value={presenceSearch}
-                          onChange={(e) => setPresenceSearch(e.target.value)}
-                          className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
-                      <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                              <th className="px-6 py-5">Nome / E-mail</th>
-                              <th className="px-6 py-5">Cargo / Tipo</th>
-                              <th className="px-6 py-5">Instrumento</th>
-                              <th className="px-6 py-5 text-right">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-sm divide-y divide-slate-50">
-                            {allProfiles
-                              .filter(p =>
-                                p.name.toLowerCase().includes(presenceSearch.toLowerCase()) ||
-                                p.email.toLowerCase().includes(presenceSearch.toLowerCase())
-                              )
-                              .map((profile) => (
-                                <tr key={profile.id} className="hover:bg-slate-50/80 transition-colors">
-                                  <td className="px-6 py-5">
-                                    <div className="flex items-center gap-3">
-                                      <div className="bg-slate-100 text-slate-400 p-2.5 rounded-xl">
-                                        <User size={18} />
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <span className="font-bold text-slate-800 tracking-tight">{profile.name}</span>
-                                        <span className="text-[10px] text-slate-400 font-medium">{profile.email}</span>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-5">
-                                    <select
-                                      className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-indigo-600 outline-none cursor-pointer"
-                                      value={profile.role}
-                                      onChange={(e) => updateUserProfile(profile.id, { role: e.target.value as any })}
-                                    >
-                                      <option value="USER">Comum</option>
-                                      <option value="MUSICIAN">Músico</option>
-                                      <option value="ADMIN">Admin</option>
-                                    </select>
-                                  </td>
-                                  <td className="px-6 py-5">
-                                    <select
-                                      className="bg-transparent border-none text-xs font-bold text-slate-600 outline-none cursor-pointer"
-                                      value={profile.instrument}
-                                      onChange={(e) => updateUserProfile(profile.id, { instrument: e.target.value })}
-                                    >
-                                      {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="px-6 py-5 text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => { setMemberToEdit(profile); setIsMemberModalOpen(true); }}
-                                        className="p-2.5 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200 transition-all shadow-sm"
-                                      >
-                                        <Edit2 size={16} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => { setMemberToDelete(profile); setIsDeletingMember(true); }}
-                                        className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all shadow-sm active:scale-90"
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-
-              {/* TAB: ENCARREGADOS */}
-              {
-                adminSubTab === 'conductors' && (
-                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-lg font-bold text-slate-800 tracking-tight">Gestão de Perfis</h3>
-                      <button
-                        onClick={() => { setSelectedConductor(null); setIsCreatingConductor(true); }}
-                        className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-black hover:scale-105 transition-all"
-                      >
-                        <Plus size={16} /> NOVO PERFIL
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-                      {conductors.map(conductor => (
-                        <ConductorProfileCard
-                          key={conductor.id}
-                          conductor={conductor}
-                          onEdit={() => { setSelectedConductor(conductor); setIsCreatingConductor(true); }}
-                          onDelete={() => deleteConductor(conductor.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
-
-              {/* TAB: CONFIRMAÇÕES */}
-              {
-                adminSubTab === 'confirmations' && (
-                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <h3 className="text-lg font-bold text-slate-800 tracking-tight">Lista de Confirmados</h3>
-                      <div className="relative w-full md:w-80">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input
-                          type="text"
-                          placeholder="Busca rápida..."
-                          value={presenceSearch}
-                          onChange={(e) => setPresenceSearch(e.target.value)}
-                          className="w-full bg-white border border-slate-100 shadow-sm rounded-2xl py-2.5 pl-12 pr-4 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm mb-6">
-                      <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                              <th className="px-6 py-5">Músico</th>
-                              <th className="px-6 py-5">Instrumento</th>
-                              <th className="px-6 py-5">Evento</th>
-                              <th className="px-6 py-5">Congregação / Local</th>
-                              <th className="px-6 py-5 text-right">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-sm divide-y divide-slate-50">
-                            {filteredPresences.length > 0 ? (
-                              filteredPresences.map((presence) => {
-                                const event = events.find(e => e.id === presence.eventId);
-                                const eventName = event ? getFriendlyEventName(event.type) : 'Evento';
-                                const eventStyles = event ? getTypeStyles(event.type) : { text: 'text-slate-500', bg: 'bg-slate-100' };
-
-                                return (
-                                  <tr key={presence.id} className="hover:bg-slate-50/80 transition-colors">
-                                    <td className="px-6 py-5">
-                                      <div className="flex items-center gap-3">
-                                        <div className="bg-indigo-50 text-indigo-600 p-2 rounded-lg">
-                                          <User size={16} />
-                                        </div>
-                                        <div>
-                                          <span className="font-bold block text-slate-800 tracking-tight leading-none truncate max-w-[120px]">{presence.name}</span>
-                                          <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium mt-1 uppercase tracking-tighter italic">{presence.phone || 'Sem Telefone'}</span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                      <div className="flex items-center gap-2">
-                                        <Music size={14} className="text-slate-400" />
-                                        <span className="font-semibold text-slate-700 text-xs truncate max-w-[80px]">{presence.instrument}</span>
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                      <div className={`px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase w-fit ${eventStyles.bg} ${eventStyles.text}`}>
-                                        {eventName}
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                      <div className="flex items-center gap-2">
-                                        <MapPin size={14} className="text-emerald-500" />
-                                        <div>
-                                          <span className="font-bold block text-slate-800 tracking-tight text-xs uppercase tracking-tighter leading-none">{event?.location || 'Não informado'}</span>
-                                          <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 block">{event?.day.split(' ')[0]} {event?.month}</span>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-right">
-                                      <button onClick={() => deletePresence(presence.id)} className="p-2.5 rounded-xl text-red-500 bg-red-50 hover:bg-red-100 transition-all active:scale-90">
-                                        <Trash2 size={18} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                            ) : (
-                              <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic font-medium">
-                                  <ClipboardList size={32} className="mx-auto mb-2 opacity-20" />
-                                  Nenhuma confirmação encontrada para os filtros aplicados.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-            </div >
-          )
-          }
-
-          {/* MODALS */}
-          {/* PRESENCE MODAL */}
-          {
-            isConfirming && selectedEvent && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${getTypeStyles(selectedEvent.type).card}`}>
-                    <div className="relative z-10">
-                      <h3 className="text-2xl font-black tracking-tight">Confirmar Presença</h3>
-                      <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">{getFriendlyEventName(selectedEvent.type)} • {selectedEvent.location}</p>
-                    </div>
-                    <button onClick={() => setIsConfirming(false)} className="bg-white/20 p-3 rounded-2xl hover:bg-white/30 transition-all relative z-10 active:scale-90">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleConfirmPresence} className="p-10 space-y-6">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome Completo
-                      </label>
-                      <input
-                        required
-                        name="name"
-                        defaultValue={userProfile?.name}
-                        type="text"
-                        placeholder="Seu nome completo"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                          <Music size={14} /> Instrumento
-                        </label>
-                        <select
-                          name="instrument"
-                          defaultValue={userProfile?.instrument}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        >
-                          {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center gap-2 ml-1">
-                          <Phone size={14} /> WhatsApp
-                        </label>
-                        <input
-                          name="phone"
-                          defaultValue={userProfile?.phone}
-                          type="tel"
-                          placeholder="(00) 00000-0000"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    <button type="submit" className={`w-full text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:scale-[1.02] ${getTypeStyles(selectedEvent.type).card}`}>
-                      Confirmar agora <ChevronRight size={20} />
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* CREATE CONGREGATION MODAL */}
-          {
-            isCreatingCongregation && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center flex-shrink-0">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedCongregation ? 'Editar Congregação' : 'Nova Congregação'}</h3>
-                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Sedes e Locais de Culto</p>
-                    </div>
-                    <button onClick={() => setIsCreatingCongregation(false)} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateCongregation} className="p-8 overflow-y-auto space-y-8 no-scrollbar">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Landmark size={14} /> Nome da Congregação</label>
-                        <input required name="name" defaultValue={selectedCongregation?.name} type="text" placeholder="Ex: Santa Terezinha" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1"><Filter size={14} /> Categoria</label>
-                        <select name="category" defaultValue={selectedCongregation?.category || 'LOCAL'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.name}>{cat.name}</option>
-                          ))}
-                          {categories.length === 0 && (
-                            <>
-                              <option value="CENTRAL">CENTRAL</option>
-                              <option value="LOCAL">LOCAL</option>
-                              <option value="DISTRITO">DISTRITO</option>
-                            </>
-                          )}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2">Localização</h4>
-                      <div className="grid grid-cols-1 gap-5">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Logradouro</label>
-                          <input required name="address" defaultValue={selectedCongregation?.address} type="text" placeholder="Rua, Número, Bairro" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CEP</label>
-                            <input name="cep" defaultValue={selectedCongregation?.cep} type="text" placeholder="00000-000" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                          </div>
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cidade / Estado</label>
-                            <div className="flex gap-3">
-                              <input required name="city" defaultValue={selectedCongregation?.city} type="text" placeholder="Cidade" className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                              <input required name="state" defaultValue={selectedCongregation?.state || 'MG'} type="text" placeholder="UF" className="w-20 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
-                        Dias de Culto
-                        <button
-                          type="button"
-                          onClick={() => setTempServiceDays([...tempServiceDays, { day: '', time: '19:30' }])}
-                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
-                        >
-                          <Plus size={12} /> ADICIONAR DIA
-                        </button>
-                      </h4>
-                      <div className="space-y-3">
-                        {tempServiceDays.map((sd, idx) => (
-                          <div key={idx} className="flex gap-4 items-center">
-                            <select
-                              value={sd.day}
-                              onChange={(e) => {
-                                const newDays = [...tempServiceDays];
-                                newDays[idx].day = e.target.value;
-                                setTempServiceDays(newDays);
-                              }}
-                              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                            >
-                              <option value="">Selecione o Dia...</option>
-                              {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                            <input
-                              value={sd.time}
-                              onChange={(e) => {
-                                const newDays = [...tempServiceDays];
-                                newDays[idx].time = e.target.value;
-                                setTempServiceDays(newDays);
-                              }}
-                              type="text"
-                              placeholder="19:30"
-                              className="w-32 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium text-center"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setTempServiceDays(tempServiceDays.filter((_, i) => i !== idx))}
-                              className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-                        ))}
-                        {tempServiceDays.length === 0 && (
-                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum dia de culto adicionado.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-50 pb-2 flex justify-between items-center">
-                        Ministério
-                        <button
-                          type="button"
-                          onClick={() => setTempMinistry([...tempMinistry, { role: '', name: '' }])}
-                          className="text-[10px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 transition-colors"
-                        >
-                          <Plus size={12} /> ADICIONAR MEMBRO
-                        </button>
-                      </h4>
-                      <div className="space-y-3">
-                        {tempMinistry.map((m, idx) => (
-                          <div key={idx} className="space-y-2 p-4 bg-slate-50 rounded-[1.5rem] border border-slate-100">
-                            <div className="flex gap-4 items-start">
-                              <div className="flex-1 space-y-2">
-                                <select
-                                  value={m.role}
-                                  onChange={(e) => {
-                                    const newMin = [...tempMinistry];
-                                    newMin[idx].role = e.target.value;
-                                    setTempMinistry(newMin);
-                                  }}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                                >
-                                  <option value="">Cargo...</option>
-                                  {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                                  {roles.length === 0 && (
-                                    <>
-                                      <option value="Ancião">Ancião</option>
-                                      <option value="Diácono">Diácono</option>
-                                      <option value="Cooperador">Cooperador</option>
-                                    </>
-                                  )}
-                                </select>
-
-                                <div className="relative">
-                                  <input
-                                    value={m.name}
-                                    onChange={(e) => {
-                                      const newMin = [...tempMinistry];
-                                      newMin[idx].name = e.target.value;
-                                      newMin[idx].profileId = undefined; // Reset if typing
-                                      setTempMinistry(newMin);
-                                    }}
-                                    type="text"
-                                    placeholder="Nome ou busque no sistema..."
-                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-medium"
-                                  />
-                                  {/* Lookup Results Box would go here, for now let's simplify with a datalist or similar if possible */}
-                                  {m.name.length > 2 && !m.profileId && (
-                                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto no-scrollbar">
-                                      {allProfiles
-                                        .filter(p => p.name.toLowerCase().includes(m.name.toLowerCase()))
-                                        .map(p => (
-                                          <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => {
-                                              const newMin = [...tempMinistry];
-                                              newMin[idx].name = p.name;
-                                              newMin[idx].profileId = p.id;
-                                              setTempMinistry(newMin);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-xs hover:bg-indigo-50 border-b border-slate-50 last:border-0 transition-colors"
-                                          >
-                                            <span className="font-bold">{p.name}</span>
-                                            <span className="text-[10px] text-slate-400 ml-2 italic">({p.instrument})</span>
-                                          </button>
-                                        ))}
-                                    </div>
-                                  )}
-                                  {m.profileId && (
-                                    <div className="absolute right-2 top-1.5 bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest flex items-center gap-1">
-                                      <CheckCircle size={10} /> VINCULADO
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setTempMinistry(tempMinistry.filter((_, i) => i !== idx))}
-                                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-slate-100 mt-0.5"
-                              >
-                                <X size={18} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {tempMinistry.length === 0 && (
-                          <p className="text-center text-xs text-slate-400 py-4 italic">Nenhum membro do ministério adicionado.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-4 flex-shrink-0">
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        {selectedCongregation ? 'Atualizar Congregação' : 'Cadastrar Congregação'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* CREATE EVENT MODAL */}
-          {
-            isCreatingEvent && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 bg-slate-800 text-white flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedEvent ? 'Editar Evento' : `Novo Evento ${new Date().getFullYear()}`}</h3>
-                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">{selectedEvent ? 'Atualização de Agendamento' : 'Configuração do Cronograma'}</p>
-                    </div>
-                    <button onClick={() => { setIsCreatingEvent(false); setSelectedEvent(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateEvent} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <MapPin size={14} /> Localização / Distrito
-                      </label>
-                      <select required name="location" defaultValue={selectedEvent?.location} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value="">Selecione o Local...</option>
-                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <List size={14} /> Tipo de Evento
-                      </label>
-                      <select
-                        name="type"
-                        value={creatingEventType}
-                        onChange={(e) => setCreatingEventType(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        <option value="">Selecione...</option>
-                        {eventTypeList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5 transition-opacity opacity-100">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Encarregado
-                      </label>
-                      <select
-                        name="conductor"
-                        defaultValue={selectedEvent?.conductor || 'Coletivo'}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        <option value="Coletivo">Coletivo (Geral)</option>
-                        {uniqueConductors.filter(c => c !== 'Todos').map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Calendar size={14} /> Mês
-                      </label>
-                      <select name="month" defaultValue={selectedEvent?.month} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        {MONTHS_PT.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Número)</label>
-                        <input required name="day" defaultValue={selectedEvent?.day.split(' ')[0]} type="number" min="1" max="31" placeholder="Ex: 15" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dia (Semana)</label>
-                        <select name="weekday" defaultValue={selectedEvent?.day.split('(')[1]?.replace(')', '')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(w => <option key={w} value={w}>{w}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Clock size={14} /> Horário
-                      </label>
-                      <input required name="time" defaultValue={selectedEvent?.time} type="text" placeholder="Ex: 17:00h" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="md:col-span-2 pt-4">
-                      <button type="submit" className="w-full bg-slate-800 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-slate-900">
-                        {selectedEvent ? 'Salvar Alterações' : 'Salvar Novo Evento'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {
-            isCreatingConductor && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">{selectedConductor ? 'Editar Perfil' : 'Novo Encarregado'}</h3>
-                      <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Gestão de Perfis de Música</p>
-                    </div>
-                    <button onClick={() => { setIsCreatingConductor(false); setSelectedConductor(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddOrUpdateConductor} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome do Encarregado
-                      </label>
-                      <input required name="name" defaultValue={selectedConductor?.name} type="text" placeholder="Nome Completo" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Calendar size={14} /> Idade
-                      </label>
-                      <input required name="age" defaultValue={selectedConductor?.age} type="number" placeholder="Anos" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Music size={14} /> Instrumento
-                      </label>
-                      <select name="instrument" defaultValue={selectedConductor?.instrument} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <MapPin size={14} /> Congregação Comum
-                      </label>
-                      <select name="congregation" defaultValue={selectedConductor?.congregation} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value="">Selecione...</option>
-                        {congregationList.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <List size={14} /> Tipo
-                      </label>
-                      <select name="type" defaultValue={selectedConductor?.type || ConductorType.LOCAL} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium">
-                        <option value={ConductorType.LOCAL}>Local</option>
-                        <option value={ConductorType.REGIONAL}>Regional</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Camera size={14} /> URL da Foto (Opcional)
-                      </label>
-                      <input name="photoUrl" defaultValue={selectedConductor?.photoUrl} type="url" placeholder="https://..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium" />
-                    </div>
-
-                    <div className="md:col-span-2 pt-4">
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        {selectedConductor ? 'Salvar Alterações' : 'Cadastrar Perfil'} <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* DELETE MEMBER CONFIRMATION MODAL */}
-          {
-            isDeletingMember && memberToDelete && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
-                  <div className="p-8 bg-red-600 text-white text-center">
-                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Trash2 size={32} />
-                    </div>
-                    <h3 className="text-xl font-bold tracking-tight">Excluir Membro</h3>
-                    <p className="text-white/80 text-sm mt-1">Deseja realmente remover este usuário do sistema?</p>
-                  </div>
-                  <div className="p-8 space-y-4">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
-                      <div className="bg-white p-2 rounded-xl text-slate-400">
-                        <User size={20} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{memberToDelete.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2 pt-2">
-                      <button
-                        onClick={() => handleDeleteMember(memberToDelete)}
-                        className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        EXCLUIR AGORA
-                      </button>
-                      <button
-                        onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
-                        className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
-                      >
-                        CANCELAR
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {/* EDIT MEMBER MODAL */}
-          {
-            isMemberModalOpen && memberToEdit && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar border border-slate-100">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-10">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight">Editar Membro</h3>
-                      <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em]">Gestão Administrativa de Perfil</p>
-                    </div>
-                    <button onClick={() => { setIsMemberModalOpen(false); setMemberToEdit(null); }} className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all">
-                      <X size={24} />
-                    </button>
-                  </div>
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const fd = new FormData(e.currentTarget);
-                      const congId = fd.get('congregationId') as string;
-                      const updates = {
-                        name: fd.get('name') as string,
-                        phone: fd.get('phone') as string,
-                        instrument: fd.get('instrument') as string,
-                        role: fd.get('role') as any,
-                        congregation_id: congId || null,
-                      };
-                      await updateUserProfile(memberToEdit.id, updates as any);
-                      setIsMemberModalOpen(false);
-                      setMemberToEdit(null);
-                    }}
-                    className="p-8 space-y-5"
-                  >
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <User size={14} /> Nome Completo
-                      </label>
-                      <input
-                        name="name"
-                        required
-                        defaultValue={memberToEdit.name}
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                          <Briefcase size={14} /> Nível de Acesso
-                        </label>
-                        <select
-                          name="role"
-                          defaultValue={memberToEdit.role}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        >
-                          <option value="USER">COMUM</option>
-                          <option value="MUSICIAN">MÚSICO</option>
-                          <option value="ADMIN">ADMINISTRADOR</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                          <Music size={14} /> Instrumento
-                        </label>
-                        <select
-                          name="instrument"
-                          defaultValue={memberToEdit.instrument}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                        >
-                          {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Phone size={14} /> WhatsApp
-                      </label>
-                      <input
-                        name="phone"
-                        defaultValue={memberToEdit.phone}
-                        type="tel"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 ml-1">
-                        <Landmark size={14} /> Congregação Comum
-                      </label>
-                      <select
-                        name="congregationId"
-                        defaultValue={memberToEdit.congregation_id || ''}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                      >
-                        <option value="">Selecione...</option>
-                        {congregations.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="pt-4">
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-5 rounded-[1.5rem] shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all hover:bg-indigo-700">
-                        SALVAR ALTERAÇÕES <ChevronRight size={20} />
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )
-          }
-
-          {/* DELETE CONFIRMATION MODAL */}
-          {
-            isDeletingMember && memberToDelete && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-4">
-                <div className="bg-white rounded-[2.5rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="p-8 bg-red-600 text-white text-center">
-                    <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Trash2 size={32} />
-                    </div>
-                    <h3 className="text-xl font-bold tracking-tight">Confirmar Exclusão</h3>
-                    <p className="text-white/80 text-sm mt-2">Deseja realmente excluir este membro? Esta ação não pode ser desfeita.</p>
-                  </div>
-                  <div className="p-8 space-y-3">
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Membro</p>
-                      <p className="text-sm font-bold text-slate-800">{memberToDelete.name}</p>
-                      <p className="text-xs text-slate-500">{memberToDelete.email}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 pt-2">
-                      <button
-                        onClick={() => handleDeleteMember(memberToDelete)}
-                        className="w-full bg-red-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        EXCLUIR AGORA
-                      </button>
-                      <button
-                        onClick={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
-                        className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-200 transition-all active:scale-95"
-                      >
-                        CANCELAR
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          {/* STATISTICS TAB (Admin Only) */}
           {activeTab === 'statistics' && userProfile?.role === 'ADMIN' && (
             <StatisticsDashboard
               congregations={congregations}
@@ -2554,36 +818,123 @@ export default function App() {
               userProfileId={userProfile?.id}
             />
           )}
+        </Suspense>
+      </main>
 
-        </main >
+      {/* ── Modals ── */}
+      {isConfirming && selectedEvent && (
+        <PresenceModal
+          event={selectedEvent}
+          userProfile={userProfile}
+          eventTypeList={eventTypeList}
+          onClose={() => { setIsConfirming(false); setSelectedEvent(null); }}
+          onSubmit={handleConfirmPresence}
+        />
       )}
 
-      {
-        isCropping && imageToCrop && (
-          <ImageCropperModal
-            image={imageToCrop}
-            onCropComplete={onCropComplete}
-            onCancel={() => {
-              setIsCropping(false);
-              setImageToCrop(null);
-            }}
-          />
-        )
-      }
+      {isCreatingEvent && (
+        <EventModal
+          event={selectedEvent}
+          creatingEventType={creatingEventType}
+          setCreatingEventType={setCreatingEventType}
+          congregationList={congregationList}
+          eventTypeList={eventTypeList}
+          uniqueConductors={uniqueConductors}
+          onClose={() => { setIsCreatingEvent(false); setSelectedEvent(null); }}
+          onSubmit={handleAddOrUpdateEvent}
+        />
+      )}
+
+      {isCreatingConductor && (
+        <ConductorModal
+          conductor={selectedConductor}
+          congregationList={congregationList}
+          onClose={() => { setIsCreatingConductor(false); setSelectedConductor(null); }}
+          onSubmit={handleAddOrUpdateConductor}
+        />
+      )}
+
+      {isCreatingCongregation && (
+        <CongregationModal
+          congregation={selectedCongregation}
+          categories={categories}
+          roles={roles}
+          allProfiles={allProfiles}
+          tempServiceDays={tempServiceDays}
+          setTempServiceDays={setTempServiceDays}
+          tempMinistry={tempMinistry}
+          setTempMinistry={setTempMinistry}
+          onClose={() => { setIsCreatingCongregation(false); setSelectedCongregation(null); }}
+          onSubmit={handleAddOrUpdateCongregation}
+        />
+      )}
+
+      {isMemberModalOpen && memberToEdit && (
+        <EditMemberModal
+          member={memberToEdit}
+          congregations={congregations}
+          onClose={() => { setIsMemberModalOpen(false); setMemberToEdit(null); }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            const congId = fd.get('congregationId') as string;
+            const updates = {
+              name: fd.get('name') as string,
+              phone: fd.get('phone') as string,
+              instrument: fd.get('instrument') as string,
+              role: fd.get('role') as UserRole,
+              congregation_id: congId || null,
+            };
+            await updateUserProfile(memberToEdit.id, updates);
+            setIsMemberModalOpen(false);
+            setMemberToEdit(null);
+          }}
+        />
+      )}
+
+      {isDeletingMember && memberToDelete && (
+        <DeleteMemberModal
+          member={memberToDelete}
+          onClose={() => { setIsDeletingMember(false); setMemberToDelete(null); }}
+          onConfirm={handleDeleteMember}
+        />
+      )}
+
+      {isDeletingEvent && eventToDelete && (
+        <DeleteEventModal
+          event={eventToDelete}
+          onClose={() => { setIsDeletingEvent(false); setEventToDelete(null); }}
+          onConfirm={confirmDeleteEvent}
+        />
+      )}
+
+      {isCropping && imageToCrop && (
+        <ImageCropperModal
+          image={imageToCrop}
+          onCropComplete={onCropComplete}
+          onCancel={() => { setIsCropping(false); setImageToCrop(null); }}
+        />
+      )}
 
       <Footer />
 
       {/* FAB Mobile */}
-      {
-        ['events', 'admin'].includes(activeTab) && (
-          <button
-            onClick={() => { if (activeTab === 'admin') setIsCreatingEvent(true); else setActiveTab('events'); }}
-            className="fixed bottom-24 right-6 bg-indigo-600 text-white p-5 rounded-[1.5rem] shadow-2xl shadow-indigo-300 z-40 hover:scale-110 active:scale-90 transition-all md:hidden border-4 border-white"
-          >
-            {activeTab === 'admin' ? <Plus size={28} /> : <List size={28} />}
-          </button>
-        )
-      }
-    </div >
+      {['events', 'admin'].includes(activeTab) && (
+        <button
+          onClick={() => {
+            if (activeTab === 'admin') {
+              setSelectedEvent(null);
+              setCreatingEventType(EventType.LOCAL);
+              setIsCreatingEvent(true);
+            } else {
+              setActiveTab('events');
+            }
+          }}
+          className="fixed bottom-24 right-6 bg-indigo-600 text-white p-5 rounded-[1.5rem] shadow-2xl shadow-indigo-300 z-40 hover:scale-110 active:scale-90 transition-all md:hidden border-4 border-white"
+        >
+          <Plus size={28} strokeWidth={3} />
+        </button>
+      )}
+    </div>
   );
 }

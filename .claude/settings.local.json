@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(grep -rn \": any\\\\b\\\\|as any\\\\b\\\\|<any>\" 'a:\\\\Gestão de Ensaios' --include=*.ts --include=*.tsx --exclude-dir=node_modules --exclude-dir=dist)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)"
+    ]
+  }
+}
