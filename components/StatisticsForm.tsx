@@ -3,6 +3,7 @@ import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash } from 'lucide-reac
 import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals, emptyStatistic } from '../utils/orchestraCalculations';
 import { supabase } from '../supabaseClient';
+import { insertStatistic, updateStatistic } from '../services/statistics';
 
 interface StatisticsFormProps {
     congregations: Congregation[];
@@ -10,8 +11,11 @@ interface StatisticsFormProps {
     anciaes: Anciao[];
     encRegionais: Encarregado[];
     onClose: () => void;
-    onSaved: () => void;
+    /** Called after save. Receives the saved stat when in guest mode. */
+    onSaved: (saved?: EventStatistic) => void;
     editingStat?: EventStatistic | null;
+    isGuest?: boolean;
+    userId?: string;
 }
 
 const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -23,7 +27,7 @@ const FAMILY_COLORS: Record<string, { bg: string; border: string; label: string 
 
 export default function StatisticsForm({
     congregations, events, anciaes, encRegionais: initialEncRegionais,
-    onClose, onSaved, editingStat
+    onClose, onSaved, editingStat, isGuest = false, userId,
 }: StatisticsFormProps) {
     const encRegionais = initialEncRegionais;
     const [stat, setStat] = useState<EventStatistic>(editingStat || emptyStatistic());
@@ -42,34 +46,41 @@ export default function StatisticsForm({
 
     const handleSave = async () => {
         setSaving(true);
-        const { id: _id, created_at: _ca, ...payload } = stat as EventStatistic & { id?: string; created_at?: string };
-
-        let error;
-        if (editingStat?.id) {
-            ({ error } = await supabase.from('event_statistics').update(payload).eq('id', editingStat.id));
-        } else {
-            const { data, error: insertError } = await supabase.from('event_statistics').insert(payload).select('id').single();
-            error = insertError;
-            if (!error && data) {
-                for (const encId of selectedEncRegionais) {
-                    await supabase.from('stat_conductors').insert({ stat_id: data.id, conductor_id: encId });
-                }
+        try {
+            // ── Guest mode: pass stat back to parent for sessionStorage ──
+            if (isGuest) {
+                const guestStat: EventStatistic = editingStat?.id
+                    ? { ...stat, id: editingStat.id }
+                    : { ...stat, id: crypto.randomUUID() };
+                onSaved(guestStat);
+                return;
             }
-        }
 
-        if (error) {
-            alert('Erro ao salvar: ' + error.message);
-        } else {
-            onSaved();
+            // ── Authenticated mode ────────────────────────────────────────
+            const { id: _id, created_at: _ca, ...payload } = stat as EventStatistic & { id?: string; created_at?: string };
+
+            if (editingStat?.id) {
+                await updateStatistic(editingStat.id, payload);
+                onSaved();
+            } else {
+                const saved = await insertStatistic({ ...payload, created_by: userId! });
+                for (const encId of selectedEncRegionais) {
+                    await supabase.from('stat_conductors').insert({ stat_id: saved.id, conductor_id: encId });
+                }
+                onSaved();
+            }
+        } catch (err) {
+            alert('Erro ao salvar: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleAddAnciao = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         const { error } = await supabase.from('anciaes').insert({ name: fd.get('name') as string });
-        if (!error) { setShowAnciaoModal(false); onSaved(); }
+        if (!error) { setShowAnciaoModal(false); onSaved(undefined); }
     };
 
     const handleAddEnc = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -78,7 +89,7 @@ export default function StatisticsForm({
         const { error } = await supabase.from('conductors').insert({
             id: crypto.randomUUID(), name: fd.get('name') as string, congregation: fd.get('congregation') as string, type: 'Regional'
         });
-        if (!error) { setShowEncModal(false); onSaved(); }
+        if (!error) { setShowEncModal(false); onSaved(undefined); }
     };
 
     const inputClass = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-semibold text-lg text-center shadow-sm";

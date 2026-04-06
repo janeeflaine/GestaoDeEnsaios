@@ -30,6 +30,7 @@ import { ProfilePage } from './pages/ProfilePage';
 const StatisticsDashboard = lazy(() => import('./components/StatisticsDashboard'));
 const AdminPage = lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
 const AiPage = lazy(() => import('./pages/AiPage').then(m => ({ default: m.AiPage })));
+const SharedStatPage = lazy(() => import('./pages/SharedStatPage').then(m => ({ default: m.SharedStatPage })));
 
 // Modals
 import { PresenceModal } from './components/modals/PresenceModal';
@@ -52,6 +53,8 @@ import * as configService from './services/config';
 
 import { getFriendlyEventName } from './utils/eventHelpers';
 import logger from './utils/logger';
+import { getStatByShareToken } from './services/statistics';
+import type { EventStatistic } from './types';
 
 
 export default function App() {
@@ -62,6 +65,10 @@ export default function App() {
 
   const enterGuest = () => { sessionStorage.setItem('guestMode', 'true'); setIsGuest(true); };
   const exitGuest = () => { sessionStorage.removeItem('guestMode'); setIsGuest(false); };
+
+  // ── Shared stat (via ?stat_share=TOKEN in URL) ────────────────
+  const [sharedStat, setSharedStat] = useState<EventStatistic | null>(null);
+  const [sharedStatLoading, setSharedStatLoading] = useState(false);
 
   // ── Navigation ────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -160,6 +167,19 @@ export default function App() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // ── Detect ?stat_share=TOKEN on mount ─────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('stat_share');
+    if (!token) return;
+    setSharedStatLoading(true);
+    setActiveTab('statistics');
+    getStatByShareToken(token)
+      .then((stat) => { if (stat) setSharedStat(stat); })
+      .catch((err) => logger.error('share token lookup failed', err))
+      .finally(() => setSharedStatLoading(false));
+  }, []);
 
   const fetchUserProfileData = async (userId: string, currentSession?: Session) => {
     const profile = await profilesService.fetchUserProfile(userId);
@@ -666,7 +686,7 @@ export default function App() {
 
   return (
     <div className="pb-24 flex flex-col min-h-screen selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} user={userProfile} />
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} user={userProfile} isGuest={isGuest} />
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       <main className="max-w-6xl mx-auto w-full flex-grow">
@@ -811,12 +831,32 @@ export default function App() {
             <AiPage userProfile={userProfile} statsSummary={null} />
           )}
 
-          {activeTab === 'statistics' && userProfile?.role === 'ADMIN' && (
-            <StatisticsDashboard
-              congregations={congregations}
-              events={events}
-              userProfileId={userProfile?.id}
-            />
+          {activeTab === 'statistics' && (
+            sharedStat ? (
+              <SharedStatPage
+                stat={sharedStat}
+                congregations={congregations}
+                isGuest={isGuest}
+                isAuthenticated={!!session}
+                userId={userProfile?.id}
+                onBack={() => setSharedStat(null)}
+                onSavedCopy={() => setSharedStat(null)}
+                onGoToProfile={() => setActiveTab('profile')}
+                showToast={showToast}
+              />
+            ) : sharedStatLoading ? (
+              <div className="flex items-center justify-center p-20">
+                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <StatisticsDashboard
+                congregations={congregations}
+                events={events}
+                isGuest={isGuest}
+                userId={userProfile?.id}
+                onGoToProfile={() => setActiveTab('profile')}
+              />
+            )
           )}
         </Suspense>
       </main>

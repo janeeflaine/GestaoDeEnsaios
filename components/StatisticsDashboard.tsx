@@ -1,23 +1,37 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2 } from 'lucide-react';
+import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent } from '../types';
-import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals } from '../utils/orchestraCalculations';
+import { calcFamilyTotals, calcMinistryTotals } from '../utils/orchestraCalculations';
 import { generateStatisticsPDF, getStatisticsPdfDataUrl } from '../utils/pdfReport';
 import PdfPreviewModal from './modals/PdfPreviewModal';
+import { ShareStatModal } from './modals/ShareStatModal';
 import { supabase } from '../supabaseClient';
 import StatisticsForm from './StatisticsForm';
+import {
+    loadGuestStatistics,
+    upsertGuestStatistic,
+    deleteGuestStatistic,
+    fetchMyStatistics,
+    deleteStatistic,
+} from '../services/statistics';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface StatisticsDashboardProps {
     congregations: Congregation[];
     events: RehearsalEvent[];
-    userProfileId?: string;
+    isGuest?: boolean;
+    userId?: string;
+    onGoToProfile?: () => void;
 }
 
-export default function StatisticsDashboard({ congregations, events, userProfileId }: StatisticsDashboardProps) {
+const GUEST_BANNER_DISMISSED_KEY = 'guest_stat_banner_dismissed';
+
+export default function StatisticsDashboard({
+    congregations, events, isGuest = false, userId, onGoToProfile,
+}: StatisticsDashboardProps) {
     const [statistics, setStatistics] = useState<EventStatistic[]>([]);
     const [anciaes, setAnciaes] = useState<Anciao[]>([]);
     const [encRegionais, setEncRegionais] = useState<Encarregado[]>([]);
@@ -27,23 +41,86 @@ export default function StatisticsDashboard({ congregations, events, userProfile
     const [isExporting, setIsExporting] = useState<string | null>(null);
     const [previewStat, setPreviewStat] = useState<EventStatistic | null>(null);
     const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+    const [sharingStat, setSharingStat] = useState<EventStatistic | null>(null);
+    const [bannerDismissed, setBannerDismissed] = useState(
+        () => sessionStorage.getItem(GUEST_BANNER_DISMISSED_KEY) === '1'
+    );
 
     const fetchData = async () => {
         setLoading(true);
-        const [statsRes, ancRes, encRes] = await Promise.all([
-            supabase.from('event_statistics').select('*').order('event_date', { ascending: false }),
-            supabase.from('anciaes').select('*').order('name'),
-            supabase.from('conductors').select('*').eq('type', 'Regional').order('name'),
-        ]);
-        if (statsRes.data) setStatistics(statsRes.data as EventStatistic[]);
-        if (ancRes.data) setAnciaes(ancRes.data as Anciao[]);
-        if (encRes.data) setEncRegionais(encRes.data as Encarregado[]);
-        setLoading(false);
+        try {
+            if (isGuest) {
+                setStatistics(loadGuestStatistics());
+            } else {
+                setStatistics(await fetchMyStatistics());
+            }
+
+            const [ancRes, encRes] = await Promise.all([
+                supabase.from('anciaes').select('*').order('name'),
+                supabase.from('conductors').select('*').eq('type', 'Regional').order('name'),
+            ]);
+            if (ancRes.data) setAnciaes(ancRes.data as Anciao[]);
+            if (encRes.data) setEncRegionais(encRes.data as Encarregado[]);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { fetchData(); }, [isGuest, userId]);
 
-    // Aggregate all statistics for dashboard
+    // ── Guest stat CRUD ───────────────────────────────────────
+    const handleGuestSave = (stat: EventStatistic) => {
+        setStatistics(upsertGuestStatistic(stat));
+    };
+
+    const handleGuestDelete = (id: string) => {
+        if (!confirm('Excluir esta estatística?')) return;
+        setStatistics(deleteGuestStatistic(id));
+    };
+
+    // ── Authenticated stat CRUD ───────────────────────────────
+    const handleAuthDelete = async (id: string) => {
+        if (!confirm('Excluir esta estatística?')) return;
+        await deleteStatistic(id);
+        setStatistics((prev) => prev.filter((s) => s.id !== id));
+    };
+
+    const handleDelete = (stat: EventStatistic) => {
+        if (!stat.id) return;
+        if (isGuest) {
+            handleGuestDelete(stat.id);
+        } else {
+            handleAuthDelete(stat.id);
+        }
+    };
+
+    const handleShareTokenChange = (statId: string, newToken: string | null) => {
+        setStatistics((prev) =>
+            prev.map((s) => s.id === statId ? { ...s, share_token: newToken ?? undefined } : s)
+        );
+        if (sharingStat?.id === statId) {
+            setSharingStat((prev) => prev ? { ...prev, share_token: newToken ?? undefined } : prev);
+        }
+    };
+
+    // ── PDF handlers ──────────────────────────────────────────
+    const handleExportPDF = (stat: EventStatistic) => {
+        const congregation = congregations.find(c => c.id === stat.congregation_id);
+        const anciao = anciaes.find(a => a.id === stat.anciao_id);
+        generateStatisticsPDF(stat, congregation, anciao);
+    };
+
+    const handlePreviewPDF = async (stat: EventStatistic) => {
+        setIsExporting(stat.id!);
+        const congregation = congregations.find(c => c.id === stat.congregation_id);
+        const anciao = anciaes.find(a => a.id === stat.anciao_id);
+        const dataUrl = await getStatisticsPdfDataUrl(stat, congregation, anciao);
+        setPreviewStat(stat);
+        setPreviewDataUrl(dataUrl);
+        setIsExporting(null);
+    };
+
+    // ── Aggregated data ───────────────────────────────────────
     const aggregated = useMemo(() => {
         if (statistics.length === 0) return null;
         const totals = { cordas: 0, madeiras: 0, metais: 0, acordeon: 0, total: 0 };
@@ -72,16 +149,14 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         return { totals, pct, totalMusicos, totalOrganistas, totalGeral, totalEventos: statistics.length };
     }, [statistics]);
 
-    const chartColors = ['#facc15', '#60a5fa', '#34d399', '#94a3b8']; // yellow-400, blue-400, green-400, slate-400
+    const chartColors = ['#facc15', '#60a5fa', '#34d399', '#94a3b8'];
     const chartLabels = ['Cordas', 'Madeiras', 'Metais', 'Acordeon'];
 
     const quantityChartData = {
         labels: chartLabels,
         datasets: [{
             data: aggregated ? [aggregated.totals.cordas, aggregated.totals.madeiras, aggregated.totals.metais, aggregated.totals.acordeon] : [0, 0, 0, 0],
-            backgroundColor: chartColors,
-            borderColor: 'transparent',
-            borderWidth: 2,
+            backgroundColor: chartColors, borderColor: 'transparent', borderWidth: 2,
         }],
     };
 
@@ -89,9 +164,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         labels: chartLabels,
         datasets: [{
             data: aggregated ? [aggregated.pct.cordas, aggregated.pct.madeiras, aggregated.pct.metais, aggregated.pct.acordeon] : [0, 0, 0, 0],
-            backgroundColor: chartColors,
-            borderColor: 'transparent',
-            borderWidth: 2,
+            backgroundColor: chartColors, borderColor: 'transparent', borderWidth: 2,
         }],
     };
 
@@ -103,28 +176,6 @@ export default function StatisticsDashboard({ congregations, events, userProfile
         },
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Excluir esta estatística?')) return;
-        await supabase.from('event_statistics').delete().eq('id', id);
-        fetchData();
-    };
-
-    const handleExportPDF = (stat: EventStatistic) => {
-        const congregation = congregations.find(c => c.id === stat.congregation_id);
-        const anciao = anciaes.find(a => a.id === stat.anciao_id);
-        generateStatisticsPDF(stat, congregation, anciao);
-    };
-
-    const handlePreviewPDF = async (stat: EventStatistic) => {
-        setIsExporting(stat.id!);
-        const congregation = congregations.find(c => c.id === stat.congregation_id);
-        const anciao = anciaes.find(a => a.id === stat.anciao_id);
-        const dataUrl = await getStatisticsPdfDataUrl(stat, congregation, anciao);
-        setPreviewStat(stat);
-        setPreviewDataUrl(dataUrl);
-        setIsExporting(null);
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center p-20">
@@ -134,8 +185,35 @@ export default function StatisticsDashboard({ congregations, events, userProfile
     }
 
     return (
-        <div className="px-4 py-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-            {/* Header */}
+        <div className="px-4 py-8 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
+
+            {/* ── Guest banner ────────────────────────────────── */}
+            {isGuest && !bannerDismissed && (
+                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 relative">
+                    <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-amber-800">Você está navegando como visitante</p>
+                        <p className="text-xs text-amber-700 mt-1">
+                            Seus dados ficam salvos enquanto esta aba estiver aberta, mas{' '}
+                            <strong>serão perdidos ao fechar o navegador ou a aba</strong>.
+                            Para manter seus registros permanentemente,{' '}
+                            <button onClick={onGoToProfile} className="underline font-bold hover:text-amber-900 transition-colors">
+                                crie um perfil gratuito
+                            </button>
+                            .
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => { sessionStorage.setItem(GUEST_BANNER_DISMISSED_KEY, '1'); setBannerDismissed(true); }}
+                        className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
+                        title="Fechar aviso"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+            )}
+
+            {/* ── Header ──────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
@@ -151,7 +229,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                 </button>
             </div>
 
-            {/* Summary Cards */}
+            {/* ── Summary Cards ───────────────────────────────── */}
             {aggregated && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
@@ -169,7 +247,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                 </div>
             )}
 
-            {/* Charts */}
+            {/* ── Charts ──────────────────────────────────────── */}
             {aggregated && aggregated.totals.total > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center">
@@ -187,7 +265,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                 </div>
             )}
 
-            {/* Category Table */}
+            {/* ── Family Table ─────────────────────────────────── */}
             {aggregated && (
                 <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 overflow-x-auto">
                     <table className="w-full text-sm min-w-[500px]">
@@ -206,7 +284,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                                 { label: 'Metais', total: aggregated.totals.metais, pct: aggregated.pct.metais, ideal: '25%', border: 'border-l-4 border-l-green-400', text: 'text-green-600' },
                                 { label: 'Acordeon', total: aggregated.totals.acordeon, pct: aggregated.pct.acordeon, ideal: '-', border: 'border-l-4 border-l-slate-400', text: 'text-slate-600' },
                             ].map(row => (
-                                <tr key={row.label} className={`bg-white hover:bg-slate-50 transition-colors`}>
+                                <tr key={row.label} className="bg-white hover:bg-slate-50 transition-colors">
                                     <td className={`p-4 font-bold ${row.text} ${row.border}`}>{row.label}</td>
                                     <td className="p-4 text-center text-slate-800 font-bold">{row.total}</td>
                                     <td className={`p-4 text-center font-black ${row.text}`}>{row.pct}%</td>
@@ -218,7 +296,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                 </div>
             )}
 
-            {/* Statistics List */}
+            {/* ── Statistics List ──────────────────────────────── */}
             <div className="space-y-4 pt-4">
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">Registros Consolidados</h3>
                 {statistics.length === 0 ? (
@@ -226,12 +304,18 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                         <BarChart3 size={48} className="text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-500 font-medium">Nenhuma estatística cadastrada ainda.</p>
                         <p className="text-slate-400 text-sm mt-1">Clique em "Cadastrar Dados do Evento" para começar.</p>
+                        {isGuest && (
+                            <p className="text-amber-500 text-xs mt-3 font-semibold">
+                                ⚠ Os dados serão perdidos ao fechar esta aba. <button onClick={onGoToProfile} className="underline">Crie um perfil</button> para salvar permanentemente.
+                            </p>
+                        )}
                     </div>
                 ) : (
                     statistics.map(stat => {
                         const ft = calcFamilyTotals(stat);
                         const mt = calcMinistryTotals(stat);
                         const congregation = congregations.find(c => c.id === stat.congregation_id);
+                        const hasShareToken = !!(stat as EventStatistic & { share_token?: string }).share_token;
                         return (
                             <div key={stat.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:shadow-md transition-shadow">
                                 <div className="flex-1 min-w-0 w-full sm:w-auto">
@@ -240,32 +324,38 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                                         <span className="font-semibold text-slate-600">{new Date(stat.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span> •
                                         {' '}{ft.total} inst. • Total: {mt.totalGeral}
                                     </p>
+                                    {hasShareToken && (
+                                        <p className="text-xs text-green-600 font-semibold mt-1">🔗 Link ativo</p>
+                                    )}
                                 </div>
-                                <div className="flex gap-2 flex-shrink-0">
-                                    <button
-                                        onClick={() => handlePreviewPDF(stat)}
-                                        disabled={isExporting === stat.id}
-                                        className="bg-purple-50 text-purple-600 p-2.5 rounded-xl hover:bg-purple-100 transition-all font-semibold flex items-center justify-center min-w-[40px]"
-                                        title="Pré-visualizar PDF"
-                                    >
-                                        {isExporting === stat.id ? (
-                                            <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-                                        ) : (
-                                            <Eye size={18} />
-                                        )}
+                                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                                    <button onClick={() => handlePreviewPDF(stat)} disabled={isExporting === stat.id}
+                                        className="bg-purple-50 text-purple-600 p-2.5 rounded-xl hover:bg-purple-100 transition-all flex items-center justify-center min-w-[40px]"
+                                        title="Pré-visualizar PDF">
+                                        {isExporting === stat.id
+                                            ? <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                            : <Eye size={18} />}
                                     </button>
-                                    <button
-                                        onClick={() => handleExportPDF(stat)}
-                                        disabled={isExporting === stat.id}
-                                        className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all font-semibold flex items-center justify-center min-w-[40px]"
-                                        title="Exportar PDF"
-                                    >
+                                    <button onClick={() => handleExportPDF(stat)} disabled={isExporting === stat.id}
+                                        className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl hover:bg-indigo-100 transition-all flex items-center justify-center min-w-[40px]"
+                                        title="Exportar PDF">
                                         <FileText size={18} />
                                     </button>
-                                    <button onClick={() => { setEditingStat(stat); setShowForm(true); }} className="bg-slate-50 text-slate-600 p-2.5 rounded-xl hover:bg-slate-100 transition-all" title="Editar">
+                                    {!isGuest && (
+                                        <button onClick={() => setSharingStat(stat)}
+                                            className={`p-2.5 rounded-xl transition-all flex items-center justify-center min-w-[40px] ${hasShareToken ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+                                            title="Compartilhar via WhatsApp">
+                                            <Share2 size={18} />
+                                        </button>
+                                    )}
+                                    <button onClick={() => { setEditingStat(stat); setShowForm(true); }}
+                                        className="bg-slate-50 text-slate-600 p-2.5 rounded-xl hover:bg-slate-100 transition-all"
+                                        title="Editar">
                                         <Edit2 size={18} />
                                     </button>
-                                    <button onClick={() => stat.id && handleDelete(stat.id)} className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all" title="Excluir">
+                                    <button onClick={() => handleDelete(stat)}
+                                        className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all"
+                                        title="Excluir">
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
@@ -275,7 +365,7 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                 )}
             </div>
 
-            {/* Form Modal */}
+            {/* ── Form Modal ───────────────────────────────────── */}
             {showForm && (
                 <StatisticsForm
                     congregations={congregations}
@@ -283,11 +373,32 @@ export default function StatisticsDashboard({ congregations, events, userProfile
                     anciaes={anciaes}
                     encRegionais={encRegionais}
                     editingStat={editingStat}
+                    isGuest={isGuest}
+                    userId={userId}
                     onClose={() => setShowForm(false)}
-                    onSaved={() => { setShowForm(false); fetchData(); }}
+                    onSaved={(saved) => {
+                        setShowForm(false);
+                        if (isGuest && saved) {
+                            handleGuestSave(saved);
+                        } else {
+                            fetchData();
+                        }
+                    }}
                 />
             )}
 
+            {/* ── Share Modal ──────────────────────────────────── */}
+            {sharingStat && !isGuest && (
+                <ShareStatModal
+                    statId={sharingStat.id!}
+                    statLabel={`${congregations.find(c => c.id === sharingStat.congregation_id)?.name ?? 'Evento'} — ${new Date(sharingStat.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+                    existingToken={(sharingStat as EventStatistic & { share_token?: string }).share_token ?? null}
+                    onClose={() => setSharingStat(null)}
+                    onTokenChange={handleShareTokenChange}
+                />
+            )}
+
+            {/* ── PDF Preview Modal ────────────────────────────── */}
             {previewDataUrl && previewStat && (
                 <PdfPreviewModal
                     dataUrl={previewDataUrl}

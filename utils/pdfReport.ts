@@ -608,7 +608,8 @@ export function getStatisticsPdfDataUrl(
     anciao?: Anciao | null,
 ): Promise<string> {
     return new Promise((resolve) => {
-        pdfMake.createPdf(buildStatisticsDocDef(stat, congregation, anciao)).getDataUrl(resolve);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (pdfMake.createPdf(buildStatisticsDocDef(stat, congregation, anciao)) as any).getDataUrl(resolve);
     });
 }
 

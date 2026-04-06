@@ -1,8 +1,13 @@
 import React from 'react';
 import { Layout, List, User, Settings, Music, BarChart3, Sparkles } from 'lucide-react';
-import { UserProfile } from '../types';
+import { UserProfile, UserRole } from '../types';
 
-const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void; user: UserProfile | null }> = ({ activeTab, setActiveTab, user }) => (
+const Navbar: React.FC<{
+    activeTab: string;
+    setActiveTab: (tab: string) => void;
+    user: UserProfile | null;
+    isGuest?: boolean;
+}> = ({ activeTab, setActiveTab, user, isGuest = false }) => (
     <nav className="fixed bottom-0 left-0 right-0 glass-panel px-6 py-3 flex justify-between items-center z-50 md:sticky md:top-0 md:border-b md:border-t-0">
         <div className="hidden md:flex items-center gap-2 font-bold text-indigo-400 text-xl tracking-tighter">
             <div className="bg-indigo-600 p-1.5 rounded-lg text-white"><Music size={18} /></div>
@@ -21,6 +26,13 @@ const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void;
                 <List size={20} />
                 <span className="text-[10px] font-black uppercase tracking-widest">Eventos</span>
             </button>
+
+            {/* Estatísticas: visível para todos (guest + autenticados) */}
+            <button onClick={() => setActiveTab('statistics')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'statistics' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                <BarChart3 size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Estatísticas</span>
+            </button>
+
             <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'profile' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
                 {user?.photoUrl ? (
                     <img src={user.photoUrl} className="w-5 h-5 rounded-full object-cover" alt="Perfil" />
@@ -30,24 +42,20 @@ const Navbar: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void;
                 <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
             </button>
 
-            {user && (
+            {/* IA: só para autenticados (não guest) */}
+            {user && !isGuest && (
                 <button onClick={() => setActiveTab('ia')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'ia' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
                     <Sparkles size={20} />
                     <span className="text-[10px] font-black uppercase tracking-widest">IA</span>
                 </button>
             )}
 
-            {user?.role === 'ADMIN' && (
-                <>
-                    <button onClick={() => setActiveTab('statistics')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'statistics' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <BarChart3 size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Estatísticas</span>
-                    </button>
-                    <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'admin' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Settings size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Admin</span>
-                    </button>
-                </>
+            {/* Admin: só ADMIN */}
+            {user?.role === UserRole.ADMIN && (
+                <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'admin' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <Settings size={20} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Admin</span>
+                </button>
             )}
         </div>
     </nav>
