@@ -272,9 +272,9 @@ export default function StatisticsForm({
                                 <div key={field.key} className="space-y-1 min-w-0">
                                     <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
                                     <input
-                                        type="number" min="0"
-                                        value={(stat[field.key as keyof EventStatistic] as number) || 0}
-                                        onChange={e => updateField(field.key, parseInt(e.target.value) || 0)}
+                                        type="number" min="0" placeholder="0"
+                                        value={(stat[field.key as keyof EventStatistic] as number) || ''}
+                                        onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
                                         className={inputClass}
                                     />
                                 </div>
