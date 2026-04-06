@@ -152,6 +152,7 @@ export interface EventStatistic {
   hinos_ensaiados?: number;
   created_by?: string;
   created_at?: string;
+  share_token?: string;
   // Cordas
   violino: number; viola: number; violoncelo: number;
   // Madeiras

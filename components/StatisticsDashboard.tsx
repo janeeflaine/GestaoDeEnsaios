@@ -315,7 +315,9 @@ export default function StatisticsDashboard({
                         const ft = calcFamilyTotals(stat);
                         const mt = calcMinistryTotals(stat);
                         const congregation = congregations.find(c => c.id === stat.congregation_id);
-                        const hasShareToken = !!(stat as EventStatistic & { share_token?: string }).share_token;
+                        const hasShareToken = !!stat.share_token;
+                        // Apenas o criador pode editar/excluir (guests são donos de todos os seus próprios dados locais)
+                        const isOwner = isGuest || stat.created_by === userId;
                         return (
                             <div key={stat.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:shadow-md transition-shadow">
                                 <div className="flex-1 min-w-0 w-full sm:w-auto">
@@ -348,16 +350,20 @@ export default function StatisticsDashboard({
                                             <Share2 size={18} />
                                         </button>
                                     )}
-                                    <button onClick={() => { setEditingStat(stat); setShowForm(true); }}
-                                        className="bg-slate-50 text-slate-600 p-2.5 rounded-xl hover:bg-slate-100 transition-all"
-                                        title="Editar">
-                                        <Edit2 size={18} />
-                                    </button>
-                                    <button onClick={() => handleDelete(stat)}
-                                        className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all"
-                                        title="Excluir">
-                                        <Trash2 size={18} />
-                                    </button>
+                                    {isOwner && (
+                                        <button onClick={() => { setEditingStat(stat); setShowForm(true); }}
+                                            className="bg-slate-50 text-slate-600 p-2.5 rounded-xl hover:bg-slate-100 transition-all"
+                                            title="Editar">
+                                            <Edit2 size={18} />
+                                        </button>
+                                    )}
+                                    {isOwner && (
+                                        <button onClick={() => handleDelete(stat)}
+                                            className="bg-red-50 text-red-600 p-2.5 rounded-xl hover:bg-red-100 transition-all"
+                                            title="Excluir">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -392,7 +398,7 @@ export default function StatisticsDashboard({
                 <ShareStatModal
                     statId={sharingStat.id!}
                     statLabel={`${congregations.find(c => c.id === sharingStat.congregation_id)?.name ?? 'Evento'} — ${new Date(sharingStat.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}`}
-                    existingToken={(sharingStat as EventStatistic & { share_token?: string }).share_token ?? null}
+                    existingToken={sharingStat.share_token ?? null}
                     onClose={() => setSharingStat(null)}
                     onTokenChange={handleShareTokenChange}
                 />
