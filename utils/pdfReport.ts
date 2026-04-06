@@ -74,7 +74,7 @@ function categoryCard(
                             {
                                 stack: [
                                     { text: String(total), fontSize: 26, bold: true, color: C.textDark, alignment: 'center' },
-                                    { text: 'instrumentos', fontSize: 5.5, color: C.labelColor, alignment: 'center', margin: [0, -2, 0, 0] },
+                                    { text: 'músicos', fontSize: 5.5, color: C.labelColor, alignment: 'center', margin: [0, -2, 0, 0] },
                                 ],
                                 width: '*',
                             },
@@ -239,9 +239,12 @@ function buildStatisticsDocDef(
     addFamily('ACORDEON', ft.acordeon, C.acordeonDot, C.acordeonBg, STAT_INSTRUMENTS.acordeon);
 
     // ─── Ministry items for list ──────────────────────────────────────
+    // "Músicos" uses ft.total (sum of all instrument seats) — not the manual stat.musicos field
     const ministryItems = MINISTRY_FIELDS.map(f => ({
         label: f.label.replace('Presentes', '').replace('Música', 'Música').trim(),
-        value: (stat[f.key as keyof EventStatistic] as number) || 0,
+        value: f.key === 'musicos'
+            ? ft.total
+            : ((stat[f.key as keyof EventStatistic] as number) || 0),
     }));
 
     // ─── Donut content ────────────────────────────────────────────────
