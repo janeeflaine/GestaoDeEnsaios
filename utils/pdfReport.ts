@@ -41,15 +41,15 @@ function colorDot(color: string, size = 5): PdfContent {
     };
 }
 
-// ─── Progress bar (thick, rounded) ────────────────────────────────────
-function progressBar(pct: number, color: string, width = 105, height = 9): PdfContent {
+// ─── Progress bar (slim, modern) ──────────────────────────────────────
+function progressBar(pct: number, color: string, width = 105, height = 6): PdfContent {
     const fillW = Math.max(0, Math.min(pct, 100)) * (width / 100);
     return {
         canvas: [
-            { type: 'rect', x: 0, y: 0, w: width, h: height, r: 4, color: '#E8E8E8' },
-            ...(fillW > 0 ? [{ type: 'rect', x: 0, y: 0, w: fillW, h: height, r: 4, color }] : []),
+            { type: 'rect', x: 0, y: 0, w: width, h: height, r: 3, color: '#E0E0E0' },
+            ...(fillW > 0 ? [{ type: 'rect', x: 0, y: 0, w: fillW, h: height, r: 3, color }] : []),
         ],
-        margin: [0, 2, 0, 0],
+        margin: [0, 3, 0, 0],
     };
 }
 
@@ -64,40 +64,39 @@ function categoryCard(
             widths: ['*'],
             body: [[{
                 fillColor: bgColor,
-                margin: [8, 8, 8, 8],
+                margin: [10, 10, 10, 10],
                 stack: [
                     // Title
-                    { text: label, bold: true, fontSize: 10, color: C.sectionHeader, alignment: 'center', margin: [0, 0, 0, 6] },
-                    // Total + Ideal side by side
+                    { text: label, bold: true, fontSize: 9, color: C.sectionHeader, alignment: 'center', margin: [0, 0, 0, 4] },
+                    // Number + Percentage on same row, clean hierarchy
                     {
                         columns: [
                             {
                                 stack: [
-                                    { text: 'Total', fontSize: 6, color: C.labelColor, alignment: 'center' },
-                                    { text: String(total), fontSize: 22, bold: true, color: C.textDark, alignment: 'center' },
+                                    { text: String(total), fontSize: 26, bold: true, color: C.textDark, alignment: 'center' },
+                                    { text: 'instrumentos', fontSize: 5.5, color: C.labelColor, alignment: 'center', margin: [0, -2, 0, 0] },
                                 ],
                                 width: '*',
                             },
                             {
                                 stack: [
-                                    { text: 'Total', fontSize: 6, color: C.labelColor, alignment: 'center' },
-                                    { text: `${realPct}%`, fontSize: 22, bold: true, color: C.textDark, alignment: 'center' },
+                                    { text: `${realPct}%`, fontSize: 26, bold: true, color: accentColor, alignment: 'center' },
+                                    { text: 'participação', fontSize: 5.5, color: C.labelColor, alignment: 'center', margin: [0, -2, 0, 0] },
                                 ],
                                 width: '*',
                             },
                         ],
-                        margin: [0, 0, 0, 6],
+                        margin: [0, 2, 0, 6],
                     },
                     // Progress bar
                     progressBar(realPct, accentColor),
-                    // Label
-                    { text: `Real: ${realPct}%    Ideal: ${idealStr}`, fontSize: 7, color: C.labelColor, alignment: 'center', margin: [0, 4, 0, 0] },
+                    // Ideal label
+                    { text: `Real: ${realPct}%   ·   Ideal: ${idealStr}`, fontSize: 6.5, color: C.labelColor, alignment: 'center', margin: [0, 5, 0, 0] },
                 ],
             }]],
         },
         layout: {
-            hLineWidth: () => 0.8, vLineWidth: () => 0.8,
-            hLineColor: () => '#D5D5D5', vLineColor: () => '#D5D5D5',
+            hLineWidth: () => 0, vLineWidth: () => 0,
         },
     };
 }
@@ -154,25 +153,34 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
     };
 }
 
-// ─── Ministry bar chart item ──────────────────────────────────────────
-function ministryBar(label: string, value: number, maxVal: number, color: string): PdfContent {
-    const barW = maxVal > 0 ? Math.round((value / maxVal) * 50) : 0;
-    return {
-        stack: [
-            { text: String(value), fontSize: 6, bold: true, color: C.textDark, alignment: 'center', margin: [0, 0, 0, 1] },
-            {
-                canvas: [
-                    { type: 'rect', x: 7, y: 0, w: 14, h: Math.max(barW, 2), r: 2, color },
-                ],
-                width: 28,
-                height: Math.max(barW, 2) + 2,
-                alignment: 'center',
-            },
-            { text: label, fontSize: 4.5, color: C.labelColor, alignment: 'center', margin: [0, 2, 0, 0] },
-        ],
-        width: 32,
-        alignment: 'center',
-    };
+// ─── Ministry list (2-column grid, no bars) ───────────────────────────
+function ministryList(items: { label: string; value: number }[]): PdfContent {
+    const rows: PdfContent[] = [];
+    for (let i = 0; i < items.length; i += 2) {
+        const left = items[i];
+        const right = items[i + 1];
+        rows.push({
+            columns: [
+                {
+                    width: '50%',
+                    columns: [
+                        { text: String(left.value), bold: true, fontSize: 11, color: C.textDark, width: 22, alignment: 'right' },
+                        { text: left.label, fontSize: 7, color: C.labelColor, margin: [5, 2, 0, 0] },
+                    ],
+                    margin: [0, 0, 6, 0],
+                },
+                right ? {
+                    width: '50%',
+                    columns: [
+                        { text: String(right.value), bold: true, fontSize: 11, color: C.textDark, width: 22, alignment: 'right' },
+                        { text: right.label, fontSize: 7, color: C.labelColor, margin: [5, 2, 0, 0] },
+                    ],
+                } : { width: '50%', text: '' },
+            ],
+            margin: [0, 3, 0, 3],
+        });
+    }
+    return { stack: rows };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -230,12 +238,11 @@ function buildStatisticsDocDef(
     addFamily('METAIS', ft.metais, C.metaisDot, C.metaisBg, STAT_INSTRUMENTS.metais);
     addFamily('ACORDEON', ft.acordeon, C.acordeonDot, C.acordeonBg, STAT_INSTRUMENTS.acordeon);
 
-    // ─── Ministry items for bar chart ─────────────────────────────────
+    // ─── Ministry items for list ──────────────────────────────────────
     const ministryItems = MINISTRY_FIELDS.map(f => ({
         label: f.label.replace('Presentes', '').replace('Música', 'Música').trim(),
         value: (stat[f.key as keyof EventStatistic] as number) || 0,
     }));
-    const maxMinistry = Math.max(...ministryItems.map(i => i.value), 1);
 
     // ─── Donut content ────────────────────────────────────────────────
     const donutContent = buildDonut(ft);
@@ -478,25 +485,17 @@ function buildStatisticsDocDef(
                                         layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
                                     },
 
-                                    // Ministry Bars Card
+                                    // Ministry List Card
                                     {
                                         width: '50%',
                                         table: {
                                             widths: ['*'], body: [[{
                                                 stack: [
-                                                    { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 8] },
+                                                    { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 8, 0, 8] },
                                                     {
-                                                        columns: ministryItems.slice(0, 5).map(item =>
-                                                            ministryBar(item.label, item.value, maxMinistry, C.madeirasAccent)
-                                                        ),
-                                                        margin: [4, 0, 4, 2],
+                                                        ...ministryList(ministryItems),
+                                                        margin: [8, 0, 8, 6],
                                                     },
-                                                    ...(ministryItems.length > 5 ? [{
-                                                        columns: ministryItems.slice(5).map(item =>
-                                                            ministryBar(item.label, item.value, maxMinistry, C.madeirasAccent)
-                                                        ),
-                                                        margin: [4, 4, 4, 6],
-                                                    }] : []),
                                                 ],
                                                 fillColor: C.cardBg,
                                             }]]
