@@ -49,6 +49,7 @@ export default function StatisticsDashboard({
 }: StatisticsDashboardProps) {
     const isAdmin = userRole === UserRole.ADMIN;
     const [statistics, setStatistics] = useState<EventStatistic[]>([]);
+    const [selectedStatId, setSelectedStatId] = useState<string>('');
     const [anciaes, setAnciaes] = useState<Anciao[]>([]);
     const [encRegionais, setEncRegionais] = useState<Encarregado[]>([]);
     const [showForm, setShowForm] = useState(false);
@@ -86,6 +87,14 @@ export default function StatisticsDashboard({
     };
 
     useEffect(() => { fetchData(); }, [isGuest, userId]);
+
+    useEffect(() => {
+        if (statistics.length > 0 && !selectedStatId) {
+            setSelectedStatId(statistics[0].id!);
+        } else if (statistics.length === 0) {
+            setSelectedStatId('');
+        }
+    }, [statistics, selectedStatId]);
 
     const loadPending = useCallback(async () => {
         if (!isAdmin) return;
@@ -174,22 +183,24 @@ export default function StatisticsDashboard({
 
     // ── Aggregated data ───────────────────────────────────────
     const aggregated = useMemo(() => {
-        if (statistics.length === 0) return null;
-        const totals = { cordas: 0, madeiras: 0, metais: 0, acordeon: 0, total: 0 };
-        let totalMusicos = 0, totalOrganistas = 0, totalGeral = 0;
+        if (statistics.length === 0 || !selectedStatId) return null;
 
-        statistics.forEach(stat => {
-            const ft = calcFamilyTotals(stat);
-            totals.cordas += ft.cordas;
-            totals.madeiras += ft.madeiras;
-            totals.metais += ft.metais;
-            totals.acordeon += ft.acordeon;
-            totals.total += ft.total;
-            const mt = calcMinistryTotals(stat);
-            totalMusicos += stat.musicos || 0;
-            totalOrganistas += stat.organistas || 0;
-            totalGeral += mt.totalGeral;
-        });
+        const stat = statistics.find(s => s.id === selectedStatId);
+        if (!stat) return null;
+
+        const totals = { cordas: 0, madeiras: 0, metais: 0, acordeon: 0, total: 0 };
+
+        const ft = calcFamilyTotals(stat);
+        totals.cordas = ft.cordas;
+        totals.madeiras = ft.madeiras;
+        totals.metais = ft.metais;
+        totals.acordeon = ft.acordeon;
+        totals.total = ft.total;
+
+        const mt = calcMinistryTotals(stat);
+        const totalMusicos = stat.musicos || 0;
+        const totalOrganistas = stat.organistas || 0;
+        const totalGeral = mt.totalGeral;
 
         const pct = totals.total > 0 ? {
             cordas: Math.round((totals.cordas / totals.total) * 100),
@@ -198,8 +209,8 @@ export default function StatisticsDashboard({
             acordeon: Math.round((totals.acordeon / totals.total) * 100),
         } : { cordas: 0, madeiras: 0, metais: 0, acordeon: 0 };
 
-        return { totals, pct, totalMusicos, totalOrganistas, totalGeral, totalEventos: statistics.length };
-    }, [statistics]);
+        return { totals, pct, totalMusicos, totalOrganistas, totalGeral, totalEventos: 1 };
+    }, [statistics, selectedStatId]);
 
     const rechartsPctData = useMemo(() => aggregated ? [
         { name: 'Cordas', real: aggregated.pct.cordas, ideal: 50, fill: '#facc15' },
@@ -347,6 +358,30 @@ export default function StatisticsDashboard({
                     <Plus size={20} /> Cadastrar Dados do Evento
                 </button>
             </div>
+
+            {/* ── Event Filter ──────────────────────────────────── */}
+            {statistics.length > 0 && (
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mt-6 mb-2">
+                    <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
+                        Visualizar Estatística do Evento
+                    </label>
+                    <select
+                        value={selectedStatId}
+                        onChange={(e) => setSelectedStatId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block p-3 font-semibold"
+                    >
+                        {statistics.map((stat) => {
+                            const congregation = congregations.find(c => c.id === stat.congregation_id);
+                            const dateStr = new Date(stat.event_date + 'T00:00:00').toLocaleDateString('pt-BR');
+                            return (
+                                <option key={stat.id} value={stat.id!}>
+                                    {congregation?.name || 'Congregação'} — {dateStr}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
+            )}
 
             {/* ── Summary Cards ───────────────────────────────── */}
             {aggregated && (

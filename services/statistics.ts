@@ -44,10 +44,22 @@ export function deleteGuestStatistic(id: string): EventStatistic[] {
 // ── Supabase (authenticated) helpers ─────────────────────────
 
 export async function fetchMyStatistics(): Promise<EventStatistic[]> {
-  const { data, error } = await supabase
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+
+  let query = supabase
     .from('event_statistics')
     .select('*')
     .order('event_date', { ascending: false });
+
+  if (userId) {
+    query = query.eq('created_by', userId);
+  } else {
+    // If not logged in, return nothing (guest uses sessionStorage)
+    return [];
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as EventStatistic[];
 }
