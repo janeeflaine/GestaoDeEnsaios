@@ -181,79 +181,98 @@ function buildBarChartCard(pct: { cordas: number; madeiras: number; metais: numb
     };
 }
 
-// ─── Ministry grouped list ────────────────────────────────────────────
-function ministryGroupedList(
-    groups: { label: string; items: { label: string; value: number; tocaram: number }[] }[],
-    organistasMusicos: number,
-): PdfContent {
-    const stack: PdfContent[] = [];
-    const groupTotals: { label: string; total: number }[] = [];
+// ─── Single ministry group block (standardized header + left-aligned qty) ──
+function buildMinistryGroupBlock(
+    group: { label: string; items: { label: string; value: number; tocaram: number }[] },
+): PdfContent | null {
+    const activeItems = group.items.filter(i => i.value > 0);
+    if (activeItems.length === 0) return null;
 
-    for (const group of groups) {
-        const activeItems = group.items.filter(i => i.value > 0);
-        // Group total counts only those who did NOT play
-        const groupTotal = group.items.reduce((s, i) => s + Math.max(0, i.value - i.tocaram), 0);
-        groupTotals.push({ label: group.label, total: groupTotal });
-        if (activeItems.length === 0) continue;
-
-        const bodyRows: PdfContent[][] = [
-            [{ text: group.label.toUpperCase(), bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3] }],
-        ];
-        for (const item of activeItems) {
-            const naoTocaram = Math.max(0, item.value - item.tocaram);
-            const subLabel = item.tocaram > 0
-                ? `  ${item.label}  (${item.tocaram} tocaram · ${naoTocaram} no total)`
-                : `  ${item.label}`;
-            bodyRows.push([{
-                columns: [
-                    { text: String(item.value), bold: true, fontSize: 8, color: C.textDark, width: 18, alignment: 'right' },
-                    { text: subLabel, fontSize: 6, color: C.labelColor, margin: [0, 1, 0, 0] },
-                ],
-                margin: [4, 2, 4, 2],
-            }]);
-        }
-
-        stack.push({
-            table: { widths: ['*'], body: bodyRows },
-            layout: {
-                hLineWidth: (i: number) => (i === 0 || i === 1) ? 0.5 : 0.3,
-                vLineWidth: () => 0.5,
-                hLineColor: () => C.tableBorder,
-                vLineColor: () => C.tableBorder,
-            },
-            margin: [0, 0, 0, 3],
-        });
+    const bodyRows: PdfContent[][] = [
+        [{ text: group.label.toUpperCase(), bold: true, fontSize: 6, color: C.textLight, fillColor: C.headerBar, alignment: 'center', margin: [0, 2, 0, 2] }],
+    ];
+    for (const item of activeItems) {
+        const naoTocaram = Math.max(0, item.value - item.tocaram);
+        const subLabel = item.tocaram > 0
+            ? `${item.label} (${item.tocaram} toc. · ${naoTocaram} tot.)`
+            : item.label;
+        bodyRows.push([{
+            columns: [
+                { text: String(item.value), bold: true, fontSize: 7, color: C.textDark, width: 14, alignment: 'left' },
+                { text: subLabel, fontSize: 5.5, color: C.labelColor, margin: [2, 0.5, 0, 0] },
+            ],
+            margin: [3, 1.5, 3, 1.5],
+        }]);
     }
 
-    // TOTAL table — uses only non-playing members per group
-    const totalRows: PdfContent[][] = [[
-        { text: 'TOTAL', bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3], colSpan: 2 },
-        {},
-    ]];
-    totalRows.push([
-        { text: 'Organistas e Músicos', fontSize: 6.5, color: C.textDark, bold: true, margin: [4, 2, 0, 2] },
-        { text: String(organistasMusicos), bold: true, fontSize: 6.5, color: C.sectionHeader, alignment: 'center', margin: [0, 2, 4, 2] },
-    ]);
-    for (const gt of groupTotals) {
-        if (gt.total === 0) continue;
-        totalRows.push([
-            { text: gt.label, fontSize: 6.5, color: C.textDark, margin: [4, 2, 0, 2] },
-            { text: String(gt.total), bold: true, fontSize: 6.5, color: C.textDark, alignment: 'center', margin: [0, 2, 4, 2] },
-        ]);
-    }
-
-    stack.push({
-        table: { widths: ['*', 24], body: totalRows },
+    return {
+        table: { widths: ['*'], body: bodyRows },
         layout: {
             hLineWidth: (i: number) => (i === 0 || i === 1) ? 0.5 : 0.3,
             vLineWidth: () => 0.5,
             hLineColor: () => C.tableBorder,
             vLineColor: () => C.tableBorder,
         },
-        margin: [0, 4, 0, 0],
-    });
+        margin: [0, 0, 0, 2],
+    };
+}
 
-    return { stack };
+// ─── Ministry two-column layout (saves vertical space) ────────────────
+function ministryTwoColumnLayout(
+    groups: { label: string; items: { label: string; value: number; tocaram: number }[] }[],
+    organistasMusicos: number,
+): PdfContent {
+    const blocks: PdfContent[] = [];
+    const groupTotals: { label: string; total: number }[] = [];
+
+    for (const group of groups) {
+        const groupTotal = group.items.reduce((s, i) => s + Math.max(0, i.value - i.tocaram), 0);
+        groupTotals.push({ label: group.label, total: groupTotal });
+        const block = buildMinistryGroupBlock(group);
+        if (block) blocks.push(block);
+    }
+
+    // Split blocks into two columns (left gets first half, right gets second)
+    const mid = Math.ceil(blocks.length / 2);
+    const leftBlocks = blocks.slice(0, mid);
+    const rightBlocks = blocks.slice(mid);
+
+    const columnsContent: PdfContent = {
+        columns: [
+            { width: '50%', stack: leftBlocks },
+            { width: '50%', stack: rightBlocks, margin: [3, 0, 0, 0] },
+        ],
+    };
+
+    // TOTAL row (compact)
+    const totalRows: PdfContent[][] = [[
+        { text: 'TOTAL', bold: true, fontSize: 6, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 2, 0, 2], colSpan: 2 },
+        {},
+    ]];
+    totalRows.push([
+        { text: String(organistasMusicos), bold: true, fontSize: 6, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
+        { text: 'Org. + Músicos', fontSize: 5.5, color: C.labelColor, margin: [2, 1.5, 0, 1.5] },
+    ]);
+    for (const gt of groupTotals) {
+        if (gt.total === 0) continue;
+        totalRows.push([
+            { text: String(gt.total), bold: true, fontSize: 6, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
+            { text: gt.label, fontSize: 5.5, color: C.labelColor, margin: [2, 1.5, 0, 1.5] },
+        ]);
+    }
+
+    const totalTable: PdfContent = {
+        table: { widths: [14, '*'], body: totalRows },
+        layout: {
+            hLineWidth: (i: number) => (i === 0 || i === 1) ? 0.5 : 0.3,
+            vLineWidth: () => 0.5,
+            hLineColor: () => C.tableBorder,
+            vLineColor: () => C.tableBorder,
+        },
+        margin: [0, 2, 0, 0],
+    };
+
+    return { stack: [columnsContent, totalTable] };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -528,11 +547,11 @@ function buildStatisticsDocDef(
                                     widths: [20, '*'],
                                     body: [
                                         [
-                                            { text: String(stat.organistas || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.cardBg },
+                                            { text: String(stat.organistas || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'left', margin: [4, 2, 4, 2], fillColor: C.cardBg },
                                             { text: `Organista${(stat.organistas || 0) !== 1 ? 's' : ''}`, fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.cardBg },
                                         ],
                                         [
-                                            { text: String(ft.total), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.tableZebra },
+                                            { text: String(ft.total), bold: true, fontSize: 7, color: C.textDark, alignment: 'left', margin: [4, 2, 4, 2], fillColor: C.tableZebra },
                                             { text: 'Músicos', fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.tableZebra },
                                         ],
                                     ],
@@ -574,11 +593,11 @@ function buildStatisticsDocDef(
                                     widths: [20, '*'],
                                     body: [
                                         [
-                                            { text: stat.hino_abertura ? '1' : '0', bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.cardBg },
+                                            { text: stat.hino_abertura ? '1' : '0', bold: true, fontSize: 7, color: C.textDark, alignment: 'left', margin: [4, 2, 4, 2], fillColor: C.cardBg },
                                             { text: `Abertura${stat.hino_abertura ? `: ${stat.hino_abertura}` : ''}`, fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.cardBg },
                                         ],
                                         [
-                                            { text: String(stat.hinos_ensaiados || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.tableZebra },
+                                            { text: String(stat.hinos_ensaiados || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'left', margin: [4, 2, 4, 2], fillColor: C.tableZebra },
                                             {
                                                 stack: [
                                                     { text: `Hino${(stat.hinos_ensaiados || 0) !== 1 ? 's' : ''} Ensaiados`, fontSize: 7, color: C.textDark },
@@ -636,23 +655,22 @@ function buildStatisticsDocDef(
                                 margin: [0, 0, 0, 5],
                             },
 
-                            // === Row 2: Ministry Bars (Now 100% width) ===
+                            // === Row 2: Ministry (Two-Column Layout) ===
                             {
-                                // Ministry List Card
                                 table: {
                                     widths: ['*'], body: [[{
                                         stack: [
-                                            { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
+                                            { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, fillColor: C.headerBar, alignment: 'center', margin: [0, 3, 0, 3] },
                                             {
-                                                ...ministryGroupedList(ministryGroups, mt.musicosOrganistas),
-                                                margin: [6, 0, 6, 6],
+                                                ...ministryTwoColumnLayout(ministryGroups, mt.musicosOrganistas),
+                                                margin: [4, 3, 4, 4],
                                             },
                                         ],
                                         fillColor: C.cardBg,
                                     }]]
                                 },
                                 layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
-                                margin: [0, 0, 0, 5],
+                                margin: [0, 0, 0, 3],
                             },
                         ],
                         margin: [6, 0, 0, 0],
