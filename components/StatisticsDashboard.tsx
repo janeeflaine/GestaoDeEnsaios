@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X, Bell, CheckCircle, XCircle } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Doughnut } from 'react-chartjs-2';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
+import {
+    ResponsiveContainer,
+    ComposedChart,
+    BarChart,
+    Bar,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip as RechartsTooltip,
+    Legend as RechartsLegend,
+    Cell
+} from 'recharts';
 import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent, UserRole, PendingAnciao, PendingConductor } from '../types';
 import { fetchPendingAnciaes, approvePendingAnciao, rejectPendingAnciao } from '../services/anciaes';
 import { fetchPendingConductors, approvePendingConductor, rejectPendingConductor } from '../services/conductors';
@@ -20,7 +30,7 @@ import {
     deleteStatistic,
 } from '../services/statistics';
 
-ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
+// Chart.js removed in favor of Recharts
 
 interface StatisticsDashboardProps {
     congregations: Congregation[];
@@ -191,56 +201,77 @@ export default function StatisticsDashboard({
         return { totals, pct, totalMusicos, totalOrganistas, totalGeral, totalEventos: statistics.length };
     }, [statistics]);
 
-    const chartColors = ['#facc15', '#60a5fa', '#34d399', '#94a3b8'];
-    const chartLabels = ['Cordas', 'Madeiras', 'Metais', 'Acordeon'];
+    const rechartsPctData = useMemo(() => aggregated ? [
+        { name: 'Cordas', real: aggregated.pct.cordas, ideal: 50, fill: '#facc15' },
+        { name: 'Madeiras', real: aggregated.pct.madeiras, ideal: 25, fill: '#60a5fa' },
+        { name: 'Metais', real: aggregated.pct.metais, ideal: 25, fill: '#34d399' },
+        { name: 'Acordeon', real: aggregated.pct.acordeon, ideal: 0, fill: '#94a3b8' },
+    ] : [], [aggregated]);
 
-    const quantityChartData = {
-        labels: chartLabels,
-        datasets: [{
-            data: aggregated ? [aggregated.totals.cordas, aggregated.totals.madeiras, aggregated.totals.metais, aggregated.totals.acordeon] : [0, 0, 0, 0],
-            backgroundColor: chartColors, borderColor: 'transparent', borderWidth: 2,
-        }],
-    };
+    const rechartsQtyData = useMemo(() => aggregated ? [
+        { name: 'Cordas', value: aggregated.totals.cordas, fill: '#facc15' },
+        { name: 'Madeiras', value: aggregated.totals.madeiras, fill: '#60a5fa' },
+        { name: 'Metais', value: aggregated.totals.metais, fill: '#34d399' },
+        { name: 'Acordeon', value: aggregated.totals.acordeon, fill: '#94a3b8' },
+    ] : [], [aggregated]);
 
-    const percentageChartData = {
-        labels: chartLabels,
-        datasets: [{
-            data: aggregated ? [aggregated.pct.cordas, aggregated.pct.madeiras, aggregated.pct.metais, aggregated.pct.acordeon] : [0, 0, 0, 0],
-            backgroundColor: chartColors, borderColor: 'transparent', borderWidth: 2,
-        }],
-    };
+    const TargetMarker = useCallback((props: any) => {
+        const { cx, cy, payload } = props;
+        if (cy == null || payload.ideal === 0) return null;
+        const width = 45;
+        return (
+            <line x1={cx - width / 2} y1={cy} x2={cx + width / 2} y2={cy} stroke="#0f172a" strokeWidth={3} strokeLinecap="round" />
+        );
+    }, []);
 
-    const quantityChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'bottom' as const, labels: { color: '#94A3B8', font: { size: 12, weight: 'bold' as const } } },
-            datalabels: {
-                color: '#ffffff',
-                font: { weight: 'bold' as const, size: 14 },
-                formatter: (value: number) => value > 0 ? value : '',
-                display: function (context: any) {
-                    return context.dataset.data[context.dataIndex] > 0;
+    const PercentageTooltip = useCallback(({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const realStr = payload.find((p: any) => p.dataKey === 'real');
+            const idealStr = payload.find((p: any) => p.dataKey === 'ideal');
+
+            const real = realStr ? Number(realStr.value) : 0;
+            const ideal = idealStr ? Number(idealStr.value) : 0;
+
+            let statusText = '';
+            let statusColor = '';
+            if (ideal > 0) {
+                const diff = real - ideal;
+                if (diff < -5) {
+                    statusText = 'Abaixo do Ideal 🚨';
+                    statusColor = 'text-red-500';
+                } else if (diff > 5) {
+                    statusText = 'Acima do Ideal ⚠️';
+                    statusColor = 'text-amber-500';
+                } else {
+                    statusText = 'Próximo ao Ideal ✅';
+                    statusColor = 'text-green-500';
                 }
             }
-        },
-    };
 
-    const percentageChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { position: 'bottom' as const, labels: { color: '#94A3B8', font: { size: 12, weight: 'bold' as const } } },
-            datalabels: {
-                color: '#ffffff',
-                font: { weight: 'bold' as const, size: 14 },
-                formatter: (value: number) => value > 0 ? `${value}%` : '',
-                display: function (context: any) {
-                    return context.dataset.data[context.dataIndex] > 0;
-                }
-            }
-        },
-    };
+            return (
+                <div className="bg-white p-3 border border-slate-100 shadow-xl rounded-xl min-w-[150px]">
+                    <p className="font-bold text-slate-800 mb-2">{label}</p>
+                    <p className="text-sm font-bold" style={{ color: realStr?.color || '#000' }}>Barra (Real): {real}%</p>
+                    {ideal > 0 && <p className="text-sm font-bold text-slate-700">Linha (Meta): {ideal}%</p>}
+                    {statusText && <p className={`text-xs font-black mt-2 ${statusColor}`}>{statusText}</p>}
+                </div>
+            );
+        }
+        return null;
+    }, []);
+
+    const QuantityTooltip = useCallback(({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0];
+            return (
+                <div className="bg-white p-3 border border-slate-100 shadow-xl rounded-xl min-w-[120px]">
+                    <p className="font-bold text-slate-800 mb-1">{label}</p>
+                    <p className="text-sm font-bold" style={{ color: data.color || '#000' }}>Total: {data.value}</p>
+                </div>
+            );
+        }
+        return null;
+    }, []);
 
     if (loading) {
         return (
@@ -341,13 +372,39 @@ export default function StatisticsDashboard({
                     <div className="bg-white p-6 rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Quantidade Total por Família</h3>
                         <div className="w-full h-72 flex items-center justify-center pt-2">
-                            <Doughnut data={quantityChartData} options={quantityChartOptions as any} />
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={rechartsQtyData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                                    <RechartsTooltip content={<QuantityTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                    <Bar dataKey="value" name="Quantidade" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? v : '' }}>
+                                        {rechartsQtyData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Porcentagem Real (%)</h3>
+                        <div className="w-full flex justify-between items-center mb-6">
+                            <div className="w-4"></div>
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Porcentagem Real vs Ideal</h3>
+                            <div className="w-4"></div>
+                        </div>
                         <div className="w-full h-72 flex items-center justify-center pt-2">
-                            <Doughnut data={percentageChartData} options={percentageChartOptions as any} />
+                            <ResponsiveContainer width="100%" height="100%">
+                                <ComposedChart data={rechartsPctData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                                    <RechartsTooltip content={<PercentageTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                    <RechartsLegend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
+                                    <Bar dataKey="real" name="Barra (Real)" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? `${v}%` : '' }}>
+                                        {rechartsPctData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                    </Bar>
+                                    <Line type="monotone" dataKey="ideal" name="Linha (Meta/Ideal)" stroke="#0f172a" strokeWidth={0} dot={<TargetMarker />} activeDot={false} legendType="line" />
+                                </ComposedChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
