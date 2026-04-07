@@ -378,7 +378,7 @@ export default function StatisticsDashboard({
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} dy={10} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                                     <RechartsTooltip content={<QuantityTooltip />} cursor={{ fill: '#f8fafc' }} />
-                                    <Bar dataKey="value" name="Quantidade" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? v : '' }}>
+                                    <Bar dataKey="value" name="Quantidade" fill="#475569" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? v : '' }}>
                                         {rechartsQtyData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
                                     </Bar>
                                 </BarChart>
@@ -399,7 +399,7 @@ export default function StatisticsDashboard({
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                                     <RechartsTooltip content={<PercentageTooltip />} cursor={{ fill: '#f8fafc' }} />
                                     <RechartsLegend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
-                                    <Bar dataKey="real" name="Barra (Real)" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? `${v}%` : '' }}>
+                                    <Bar dataKey="real" name="Barra (Real)" fill="#475569" radius={[4, 4, 0, 0]} maxBarSize={60} label={{ position: 'top', fill: '#475569', fontSize: 12, fontWeight: 'bold', formatter: (v: any) => v > 0 ? `${v}%` : '' }}>
                                         {rechartsPctData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
                                     </Bar>
                                     <Line type="monotone" dataKey="ideal" name="Linha (Meta/Ideal)" stroke="#0f172a" strokeWidth={0} dot={<TargetMarker />} activeDot={false} legendType="line" />
