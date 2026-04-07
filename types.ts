@@ -270,48 +270,48 @@ export const MINISTRY_GROUPS = [
   {
     label: 'Ministério',
     fields: [
-      { key: 'anciaes_presentes', label: 'Anciões',               tocKey: 'anciaes_tocaram' },
-      { key: 'diaconos',          label: 'Diáconos',              tocKey: 'diaconos_tocaram' },
-      { key: 'coop_oficio',       label: 'Cooperador do O. M.',   tocKey: 'coop_oficio_tocaram' },
-      { key: 'coop_jovens',       label: 'Cooperador de J. e M.', tocKey: 'coop_jovens_tocaram' },
+      { key: 'anciaes_presentes', label: 'Anciões', tocKey: 'anciaes_tocaram' },
+      { key: 'diaconos', label: 'Diáconos', tocKey: 'diaconos_tocaram' },
+      { key: 'coop_oficio', label: 'Cooperador do O. M.', tocKey: 'coop_oficio_tocaram' },
+      { key: 'coop_jovens', label: 'Cooperador de J. e M.', tocKey: 'coop_jovens_tocaram' },
     ],
   },
   {
     label: 'Encarregados Musicais',
     fields: [
       { key: 'enc_regionais_presentes', label: 'Encarregado Regional', tocKey: 'enc_regionais_tocaram' },
-      { key: 'examinadoras',            label: 'Examinadora',          tocKey: 'examinadoras_tocaram' },
+      { key: 'examinadoras', label: 'Examinadora', tocKey: 'examinadoras_tocaram' },
     ],
   },
   {
     label: 'GEM',
     fields: [
       { key: 'secretarios_gem', label: 'Secretários do GEM', tocKey: 'secretarios_gem_tocaram' },
-      { key: 'secretaria_gem',  label: 'Secretária do GEM',  tocKey: 'secretaria_gem_tocaram' },
-      { key: 'instrutores',     label: 'Instrutores',        tocKey: 'instrutores_tocaram' },
-      { key: 'instrutoras',     label: 'Instrutoras',        tocKey: 'instrutoras_tocaram' },
-      { key: 'candidatas',      label: 'Candidatas',         tocKey: 'candidatas_tocaram' },
-      { key: 'candidatos',      label: 'Candidatos',         tocKey: 'candidatos_tocaram' },
+      { key: 'secretaria_gem', label: 'Secretária do GEM', tocKey: 'secretaria_gem_tocaram' },
+      { key: 'instrutores', label: 'Instrutores', tocKey: 'instrutores_tocaram' },
+      { key: 'instrutoras', label: 'Instrutoras', tocKey: 'instrutoras_tocaram' },
+      { key: 'candidatas', label: 'Candidatas', tocKey: 'candidatas_tocaram' },
+      { key: 'candidatos', label: 'Candidatos', tocKey: 'candidatos_tocaram' },
     ],
   },
   {
     label: 'Colaboradores',
     fields: [
       { key: 'secretarios_musica', label: 'Secretário da Música', tocKey: 'secretarios_musica_tocaram' },
-      { key: 'secretaria_musica',  label: 'Secretária da Música', tocKey: 'secretaria_musica_tocaram' },
-      { key: 'auxiliar_porta',     label: 'Auxiliar na Porta',    tocKey: 'auxiliar_porta_tocaram' },
-      { key: 'colaborador',        label: 'Colaborador',          tocKey: 'colaborador_tocaram' },
-      { key: 'colaboradora',       label: 'Colaboradora',         tocKey: 'colaboradora_tocaram' },
+      { key: 'secretaria_musica', label: 'Secretária da Música', tocKey: 'secretaria_musica_tocaram' },
+      { key: 'auxiliar_porta', label: 'Auxiliar na Porta', tocKey: 'auxiliar_porta_tocaram' },
+      { key: 'colaborador', label: 'Colaborador', tocKey: 'colaborador_tocaram' },
+      { key: 'colaboradora', label: 'Colaboradora', tocKey: 'colaboradora_tocaram' },
     ],
   },
   {
     label: 'Irmandade',
     fields: [
-      { key: 'irmas',  label: 'Irmãs', tocKey: 'irmas_tocaram' },
+      { key: 'irmas', label: 'Irmãs', tocKey: 'irmas_tocaram' },
       { key: 'irmaos', label: 'Irmãos', tocKey: 'irmaos_tocaram' },
     ],
   },
 ] as const;
 
 /** Flat list of all ministry field keys (for backward compat / PDF) */
-export const MINISTRY_FIELDS = MINISTRY_GROUPS.flatMap(g => g.fields);
+export const MINISTRY_FIELDS = MINISTRY_GROUPS.flatMap(g => [...g.fields]);

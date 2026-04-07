@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import { BookOpen, Mic, PenLine, Users } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Cell, ResponsiveContainer } from 'recharts';
 import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_FIELDS } from '../types';
 import { calcFamilyTotals, calcMinistryTotals } from '../utils/orchestraCalculations';
 
@@ -60,14 +60,23 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
 
     const encRegional = stat.enc_regionais && stat.enc_regionais.length > 0 ? stat.enc_regionais[0] : null;
 
-    const donutData = [
-        { name: 'CORDAS', value: ft.cordas, fill: CCB.gold },
-        { name: 'MADEIRAS', value: ft.madeiras, fill: CCB.blueLight },
-        { name: 'METAIS', value: ft.metais, fill: CCB.green },
-        { name: 'ACORDEON', value: ft.acordeon, fill: CCB.gray },
-    ].filter(d => d.value > 0);
+    const rechartsPctData = [
+        { name: 'Cordas', real: cordasPct, ideal: 50, fill: CCB.gold },
+        { name: 'Madeiras', real: madeirasPct, ideal: 25, fill: CCB.blueLight },
+        { name: 'Metais', real: metaisPct, ideal: 25, fill: CCB.green },
+        { name: 'Acordeon', real: acordeonPct, ideal: 0, fill: CCB.gray },
+    ];
 
-    const ministryItems = MINISTRY_FIELDS.map(f => ({
+    const TargetMarker = (props: any) => {
+        const { cx, cy, payload } = props;
+        if (cy == null || payload.ideal === 0) return null;
+        const width = 30;
+        return (
+            <line x1={cx - width / 2} y1={cy} x2={cx + width / 2} y2={cy} stroke="#0f172a" strokeWidth={2} strokeLinecap="round" />
+        );
+    };
+
+    const ministryItems = MINISTRY_FIELDS.map((f: any) => ({
         name: f.label.replace('Presentes', '').replace('Música', 'da Música').trim(),
         value: Number(stat[f.key as keyof EventStatistic]) || 0,
     }));
@@ -131,65 +140,114 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
                     </div>
                 </section>
 
-                {/* Hinos Section */}
-                <section className="flex gap-4">
-                    <div className="flex items-center bg-gray-200 rounded-lg overflow-hidden w-64 shadow-sm">
-                        <span className="bg-gray-300 text-[9px] font-bold px-3 py-2 text-gray-700 uppercase">Hino Abertura</span>
-                        <span className="flex-1 bg-white text-lg font-bold text-center py-1">{stat.hino_abertura || ''}</span>
-                    </div>
-                    <div className="flex items-center bg-gray-200 rounded-lg overflow-hidden flex-1 shadow-sm">
-                        <span className="bg-gray-300 text-[9px] font-bold px-3 py-2 text-gray-700 uppercase">Hinos Ensaiados</span>
-                        <span className="flex-1 bg-white text-lg font-bold text-center py-1">{stat.hinos_ensaiados || ''}</span>
-                    </div>
-                </section>
-
                 {/* Two Column Content */}
-                <div className="flex gap-4 flex-1 overflow-hidden">
+                <div className="flex gap-4 flex-1 overflow-hidden mt-3">
 
-                    {/* Left Column (Instrument List) */}
-                    <aside className="w-2/5 flex flex-col gap-3">
-                        <div className="flex flex-col flex-1 min-h-0">
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
-                                <div className="bg-gray-100 text-center py-2 border-b border-gray-300 shrink-0">
-                                    <h2 className="text-[11px] font-black text-gray-800 uppercase leading-tight">VISÃO GERAL DA ORQUESTRA</h2>
-                                </div>
-                                <div className="flex-1 overflow-y-auto text-[9px]">
-                                    {tableRows.map((row, idx) => {
-                                        if (row.isHeader) {
-                                            return (
-                                                <div key={idx} className="font-bold px-2 py-0.5 uppercase border-b border-gray-300 text-[9px]" style={{ backgroundColor: row.bg, color: row.text }}>
-                                                    {row.name}
-                                                </div>
-                                            );
-                                        }
+                    {/* Left Column (Instrument List & Hinos) */}
+                    <aside className="w-[45%] flex flex-col gap-3">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-shrink-0">
+                            <div className="bg-gray-200 text-center py-2 border-b border-gray-300 shrink-0">
+                                <h2 className="text-[10px] font-black text-gray-800 uppercase leading-tight">FORMAÇÃO ORQUESTRAL - DETALHAMENTO</h2>
+                            </div>
+                            <div className="text-[9px]">
+                                {tableRows.map((row, idx) => {
+                                    if (row.isHeader) {
                                         return (
-                                            <div key={idx} className="flex items-center px-2 py-[3px] border-b border-gray-100" style={{ backgroundColor: row.bg }}>
-                                                <div className="w-[45%] truncate font-medium text-gray-800">{row.name}</div>
-                                                <div className="w-[40%] flex items-center h-full overflow-hidden">
-                                                    {row.count !== null && row.count > 0 && (
-                                                        <div
-                                                            className="h-2.5 border shadow-sm"
-                                                            style={{
-                                                                backgroundColor: row.barColor,
-                                                                borderColor: 'rgba(0,0,0,0.2)',
-                                                                width: `${Math.max((row.count / maxInstCount) * 100, 2)}%`,
-                                                            }}
-                                                        />
-                                                    )}
-                                                    {row.count === 0 && <div className="h-2.5 w-0.5 bg-red-600" />}
-                                                </div>
-                                                <div className="w-[15%] text-right font-medium text-gray-800">{row.count}</div>
+                                            <div key={idx} className="font-bold px-2 py-0.5 uppercase border-b border-gray-300 text-[9px]" style={{ backgroundColor: row.bg, color: row.text }}>
+                                                {row.name}
                                             </div>
                                         );
-                                    })}
+                                    }
+                                    return (
+                                        <div key={idx} className="flex items-center px-2 py-[2px] border-b border-gray-100" style={{ backgroundColor: row.bg }}>
+                                            <div className="w-[45%] truncate font-medium text-gray-800">{row.name}</div>
+                                            <div className="w-[40%] flex items-center h-full overflow-hidden">
+                                                {row.count !== null && row.count > 0 && (
+                                                    <div
+                                                        className="h-2.5 border shadow-sm"
+                                                        style={{
+                                                            backgroundColor: row.barColor,
+                                                            borderColor: 'rgba(0,0,0,0.2)',
+                                                            width: `${Math.max((row.count / maxInstCount) * 100, 2)}%`,
+                                                        }}
+                                                    />
+                                                )}
+                                                {row.count === 0 && <div className="h-2.5 w-0.5 bg-red-600" />}
+                                            </div>
+                                            <div className="w-[15%] text-right font-medium text-gray-800">{row.count}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="bg-gray-800 text-white font-bold py-1.5 px-3 text-[10px] flex justify-between">
+                                <span>TOTAL</span>
+                                <span>{ft.total}</span>
+                            </div>
+                        </div>
+
+                        {/* Músicos e Organistas Table */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-shrink-0">
+                            <div className="bg-gray-200 text-center py-2 border-b border-gray-300 shrink-0">
+                                <h2 className="text-[10px] font-black text-gray-800 uppercase leading-tight">ORGANISTAS E MÚSICOS</h2>
+                            </div>
+                            <div className="flex flex-col text-[10px]">
+                                <div className="flex items-center border-b border-gray-100 bg-white">
+                                    <div className="w-[15%] py-1 font-bold text-center border-r border-gray-100">{stat.organistas || 0}</div>
+                                    <div className="w-[85%] py-1 px-3 font-medium">Organistas</div>
+                                </div>
+                                <div className="flex items-center bg-white">
+                                    <div className="w-[15%] py-1 font-bold text-center border-r border-gray-100">{stat.musicos || 0}</div>
+                                    <div className="w-[85%] py-1 px-3 font-medium">Músicos</div>
+                                </div>
+                                <div className="bg-gray-800 text-white font-bold py-1.5 px-3 text-[10px] flex justify-between">
+                                    <span>TOTAL</span>
+                                    <span>{mt.musicosOrganistas}</span>
                                 </div>
                             </div>
                         </div>
+
+                        {/* Hinos Section */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-shrink-0">
+                            <div className="bg-gray-200 text-center py-2 border-b border-gray-300 shrink-0">
+                                <h2 className="text-[10px] font-black text-gray-800 uppercase leading-tight">HINOS</h2>
+                            </div>
+                            <div className="flex flex-col text-[10px]">
+                                <div className="flex items-center border-b border-gray-100 bg-white">
+                                    <div className="w-[15%] py-1.5 font-bold text-center border-r border-gray-100">1</div>
+                                    <div className="w-[85%] py-1.5 px-3 font-medium">Abertura: <span className="font-bold">{stat.hino_abertura || '-'}</span></div>
+                                </div>
+                                <div className="flex items-center bg-white">
+                                    <div className="w-[15%] py-1.5 font-bold text-center border-r border-gray-100">{stat.hinos_ensaiados || 0}</div>
+                                    <div className="w-[85%] py-1.5 px-3 font-medium">Hinos Ensaiados</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bar Chart Real vs Ideal */}
+                        <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-[140px] items-center">
+                            <p className="text-[9px] font-black text-gray-600 mb-1 text-center uppercase">TOTAL DE MÚSICOS POR CATEGORIA</p>
+                            <div className="w-full flex-1 flex items-center justify-center -ml-4 mt-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={rechartsPctData} margin={{ top: 12, right: 0, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 8, fontWeight: 600 }} dy={5} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 8 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                                        <Bar isAnimationActive={false} dataKey="real" fill="#475569" radius={[2, 2, 0, 0]} maxBarSize={30} label={{ position: 'top', fill: '#475569', fontSize: 8, fontWeight: 'bold', formatter: (v: any) => v > 0 ? `${v}%` : '' }}>
+                                            {rechartsPctData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+                                        </Bar>
+                                        <Line isAnimationActive={false} type="monotone" dataKey="ideal" stroke="#0f172a" strokeWidth={0} dot={<TargetMarker />} activeDot={false} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
                     </aside>
 
                     {/* Right Column (Dashboard) */}
-                    <main className="w-3/5 flex flex-col gap-4">
-                        <h2 className="text-[10px] font-black text-gray-700 uppercase border-b-2 border-gray-300 pb-1 text-center">Dashboard de Análise</h2>
+                    <main className="w-[55%] flex flex-col gap-4">
+                        <div className="bg-gray-200 text-center py-2 border border-gray-300 rounded-lg shrink-0">
+                            <h2 className="text-[10px] font-black text-gray-700 uppercase leading-tight">Dashboard de Análise</h2>
+                        </div>
 
                         {/* Dashboard Grid (4 Cards) */}
                         <div className="grid grid-cols-2 gap-3">
@@ -218,100 +276,59 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
                             ))}
                         </div>
 
-                        {/* Charts Container */}
-                        <div className="flex-1 min-h-0 flex flex-col">
-                            {/* Pessoal Adicional Cards */}
-                            <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-0">
-                                <p className="text-[9px] font-black text-gray-600 mb-1 text-center uppercase">Pessoal Adicional</p>
+                        {/* Pessoal Adicional */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+                            <div className="bg-white text-center py-2 border-b border-gray-100 shrink-0">
+                                <h2 className="text-[11px] font-black text-gray-800 uppercase leading-tight">PESSOAL ADICIONAL</h2>
+                            </div>
 
-                                <div className="flex flex-col gap-1.5 flex-1 justify-center min-h-0">
-                                    {/* Top Row: Músicos & Organistas */}
-                                    <div className="flex gap-1.5">
-                                        <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm">
-                                            <p className="text-[8px] font-bold text-gray-700 uppercase">Músicos</p>
-                                            <p className="text-lg font-black text-gray-900 leading-none mt-0.5">{stat.musicos || 0}</p>
+                            <div className="flex-1 overflow-y-auto text-[9px] bg-white">
+                                <div className="bg-gray-800 text-white text-[9px] font-bold px-3 py-1.5 uppercase text-center">Ministério</div>
+                                <div className="flex flex-col">
+                                    {ministryItems.filter(m => !['Encarregados', 'Examinadoras', 'Instrutores'].some(kw => m.name.includes(kw))).map((item, idx) => (
+                                        <div key={idx} className="flex flex-row items-center border-b border-gray-100 px-3 py-1.5">
+                                            <span className="font-black text-gray-800 mr-2">{item.value}</span>
+                                            <span className="text-gray-700">{item.name}</span>
                                         </div>
-                                        <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm">
-                                            <p className="text-[8px] font-bold text-gray-700 uppercase">Organistas</p>
-                                            <p className="text-lg font-black text-gray-900 leading-none mt-0.5">{stat.organistas || 0}</p>
-                                        </div>
-                                    </div>
+                                    ))}
+                                </div>
 
-                                    {/* Middle Row: Total */}
-                                    <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1.5 text-center border border-gray-200 shadow-sm flex items-center justify-center gap-2">
-                                        <Users className="w-4 h-4 text-gray-500" />
-                                        <div>
-                                            <p className="text-[9px] font-bold text-gray-700 uppercase">Músicos + Organistas</p>
-                                            <p className="text-xl font-black text-gray-900 leading-none mt-0.5">{mt.musicosOrganistas}</p>
+                                <div className="bg-gray-800 text-white text-[9px] font-bold px-3 py-1.5 uppercase text-center mt-3">Encarregados Musicais</div>
+                                <div className="flex flex-col">
+                                    {ministryItems.filter(m => ['Encarregados', 'Examinadoras', 'Instrutores'].some(kw => m.name.includes(kw))).map((item, idx) => (
+                                        <div key={idx} className="flex flex-row items-center border-b border-gray-100 px-3 py-1.5">
+                                            <span className="font-black text-gray-800 mr-2">{item.value}</span>
+                                            <span className="text-gray-700">{item.name}</span>
                                         </div>
-                                    </div>
-
-                                    {/* Grid of ministry items */}
-                                    <div className="grid grid-cols-3 gap-1.5 mt-0.5">
-                                        {ministryItems.map((item, idx) => (
-                                            <div key={idx} className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg p-1 text-center border border-gray-200 shadow-sm flex flex-col justify-center">
-                                                <p className="text-[7px] font-bold text-gray-700 leading-tight h-5 flex items-center justify-center">{item.name}</p>
-                                                <p className="text-base font-black text-gray-900 leading-none">{item.value}</p>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Bottom Section: Donut Chart + Totals */}
-                        <div className="flex gap-3 mt-auto">
-                            {/* Category Donut */}
-                            <div className="bg-white rounded-xl p-2 shadow-sm border border-gray-100 flex flex-col items-center relative w-[45%]">
-                                <p className="text-[8px] font-black text-gray-600 mb-0.5 text-center leading-tight">TOTAL DE MÚSICOS<br />POR CATEGORIA</p>
-                                <div className="flex-1 w-full relative min-h-[90px] flex items-center justify-center">
-                                    <ResponsiveContainer width="100%" height={90} minWidth={0}>
-                                        <PieChart>
-                                            <Pie data={donutData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} stroke="none" dataKey="value" isAnimationActive={false}>
-                                                {donutData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                                                ))}
-                                            </Pie>
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <span className="text-sm font-black text-gray-800 leading-none">{ft.total}</span>
-                                        <span className="text-[6px] font-bold text-gray-400 uppercase">Total</span>
+                        {/* Totals Column */}
+                        <div className="flex flex-col gap-2 mt-auto">
+                            {/* Footer Total Large */}
+                            <div className="rounded-xl p-3 flex items-center justify-between text-white shadow-md" style={{ backgroundColor: CCB.blueDark }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="opacity-50">
+                                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path></svg>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 w-full px-2 mt-1">
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.gold }} /><span className="text-[6px] font-bold text-gray-600">CORDAS</span></div>
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.blueLight }} /><span className="text-[6px] font-bold text-gray-600">MADEIRAS</span></div>
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.green }} /><span className="text-[6px] font-bold text-gray-600">METAIS</span></div>
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5" style={{ backgroundColor: CCB.gray }} /><span className="text-[6px] font-bold text-gray-600">ACORDEON</span></div>
+                                    <div>
+                                        <p className="text-[9px] font-bold tracking-widest uppercase text-gray-300">Total Geral:</p>
+                                        <h3 className="text-4xl font-black leading-none mt-0.5">{mt.totalGeral}</h3>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Totals Column */}
-                            <div className="flex flex-col gap-2 flex-1">
-                                {/* Footer Total Large */}
-                                <div className="rounded-xl p-3 flex items-center justify-between text-white shadow-md flex-1" style={{ backgroundColor: CCB.blueDark }}>
-                                    <div className="flex items-center gap-3">
-                                        <div className="opacity-50">
-                                            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path></svg>
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-bold tracking-widest uppercase text-gray-300">Total Geral:</p>
-                                            <h3 className="text-4xl font-black leading-none mt-0.5">{mt.totalGeral}</h3>
-                                        </div>
-                                    </div>
+                            {/* Bottom Totals */}
+                            <div className="grid grid-cols-1 gap-1.5">
+                                <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
+                                    <span className="text-[9px] font-black text-gray-700 uppercase">Músicos + Organistas:</span>
+                                    <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.musicosOrganistas}</span>
                                 </div>
-
-                                {/* Bottom Totals */}
-                                <div className="grid grid-cols-1 gap-1.5">
-                                    <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
-                                        <span className="text-[9px] font-black text-gray-700 uppercase">Músicos + Organistas:</span>
-                                        <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.musicosOrganistas}</span>
-                                    </div>
-                                    <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
-                                        <span className="text-[9px] font-black text-gray-700 uppercase">Total Geral:</span>
-                                        <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.totalGeral}</span>
-                                    </div>
+                                <div className="bg-white rounded-full px-4 py-1.5 shadow-sm border border-gray-100 flex items-center justify-between" style={{ borderLeft: `4px solid ${CCB.blueLight}` }}>
+                                    <span className="text-[9px] font-black text-gray-700 uppercase">Total Geral:</span>
+                                    <span className="text-white px-3 py-0.5 rounded-full text-sm font-black" style={{ backgroundColor: CCB.blueDark }}>{mt.totalGeral}</span>
                                 </div>
                             </div>
                         </div>
