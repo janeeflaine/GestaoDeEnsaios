@@ -1,7 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import type { TDocumentDefinitions } from 'pdfmake/interfaces';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent, MONTHS_PT } from '../types';
+import { EventStatistic, Congregation, Anciao, STAT_INSTRUMENTS, MINISTRY_GROUPS, RehearsalEvent, MONTHS_PT } from '../types';
 
 type PdfContent = Record<string, unknown>;
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals } from './orchestraCalculations';
@@ -41,13 +41,25 @@ function colorDot(color: string, size = 5): PdfContent {
     };
 }
 
-// ─── Progress bar (slim, modern) ──────────────────────────────────────
-function progressBar(pct: number, color: string, width = 105, height = 6): PdfContent {
+// ─── Progress bar with optional ideal-marker tick and over-limit red ──
+// idealPct: if provided, draws a vertical tick at that position.
+// Bar fill turns red when realPct > idealPct (only when idealPct is not null).
+function progressBar(pct: number, color: string, idealPct: number | null = null, width = 105, height = 6): PdfContent {
     const fillW = Math.max(0, Math.min(pct, 100)) * (width / 100);
+    const overLimit = idealPct !== null && pct > idealPct;
+    const fillColor = overLimit ? '#E53E3E' : color;
+    const tickX = idealPct !== null ? Math.round(idealPct * (width / 100)) : null;
+
     return {
         canvas: [
+            // Background track
             { type: 'rect', x: 0, y: 0, w: width, h: height, r: 3, color: '#E0E0E0' },
-            ...(fillW > 0 ? [{ type: 'rect', x: 0, y: 0, w: fillW, h: height, r: 3, color }] : []),
+            // Fill
+            ...(fillW > 0 ? [{ type: 'rect', x: 0, y: 0, w: fillW, h: height, r: 3, color: fillColor }] : []),
+            // Ideal marker tick (thin vertical line)
+            ...(tickX !== null ? [{
+                type: 'rect', x: tickX - 1, y: 0, w: 2, h: height, color: '#555555',
+            }] : []),
         ],
         margin: [0, 3, 0, 0],
     };
@@ -59,6 +71,8 @@ function categoryCard(
     idealPct: number | null, bgColor: string, accentColor: string
 ): PdfContent {
     const idealStr = idealPct !== null ? `${idealPct}%` : '-';
+    const overLimit = idealPct !== null && realPct > idealPct;
+    const pctColor = overLimit ? '#E53E3E' : accentColor;
     return {
         table: {
             widths: ['*'],
@@ -80,7 +94,7 @@ function categoryCard(
                             },
                             {
                                 stack: [
-                                    { text: `${realPct}%`, fontSize: 26, bold: true, color: accentColor, alignment: 'center' },
+                                    { text: `${realPct}%`, fontSize: 26, bold: true, color: pctColor, alignment: 'center' },
                                     { text: 'participação', fontSize: 5.5, color: C.labelColor, alignment: 'center', margin: [0, -2, 0, 0] },
                                 ],
                                 width: '*',
@@ -88,8 +102,8 @@ function categoryCard(
                         ],
                         margin: [0, 2, 0, 6],
                     },
-                    // Progress bar
-                    progressBar(realPct, accentColor),
+                    // Progress bar with ideal marker
+                    progressBar(realPct, accentColor, idealPct),
                     // Ideal label
                     { text: `Real: ${realPct}%   ·   Ideal: ${idealStr}`, fontSize: 6.5, color: C.labelColor, alignment: 'center', margin: [0, 5, 0, 0] },
                 ],
@@ -143,46 +157,12 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
 // ─── Donut card with centered total and legend with values ─────────────
 function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }): PdfContent {
     const size = 100;
-    const cx = size / 2, cy = size / 2;
-    const outerR = size / 2 - 4, innerR = outerR * 0.5;
-    const midR = (outerR + innerR) / 2; // radius at segment midpoint for label placement
-    const total = ft.total || 1;
-
     // Pull the number+label stack up so it visually centers in the donut hole.
     // After canvas (size=100), cursor is at bottom. Center is at 50.
     // numBlock ≈ 20px (18pt) + 1 + 8px (6pt) = 29px → starts at 50-14 = 36
     // pullUp = -(100-36) = -64, compensate bottom = 100-36-29 = 35
     const pullUp = -64;
     const compensate = 35;
-
-    // Compute value label overlays positioned at each segment's arc midpoint.
-    // Each element uses relativePosition (relative to "below canvas" in flow) + negative
-    // bottom margin to cancel its line-height contribution from the flow.
-    const segDefs = [
-        { value: ft.cordas },
-        { value: ft.madeiras },
-        { value: ft.metais },
-        { value: ft.acordeon },
-    ];
-    const valueOverlays: PdfContent[] = [];
-    let startAngle = -Math.PI / 2;
-    segDefs.forEach(seg => {
-        const sweep = (seg.value / total) * 2 * Math.PI;
-        if (seg.value > 0) {
-            const midAngle = startAngle + sweep / 2;
-            const tx = cx + midR * Math.cos(midAngle);
-            const ty = cy + midR * Math.sin(midAngle);
-            valueOverlays.push({
-                text: String(seg.value),
-                fontSize: 7,
-                bold: true,
-                color: '#FFFFFF',
-                relativePosition: { x: Math.round(tx - 4), y: Math.round(ty - size) },
-                margin: [0, 0, 0, -11], // cancel flow height so cursor stays at canvas bottom
-            });
-        }
-        startAngle += sweep;
-    });
 
     const legendRow = (
         leftColor: string, leftLabel: string, leftVal: number,
@@ -213,8 +193,6 @@ function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; 
         stack: [
             { text: 'TOTAL DE MÚSICOS POR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 8] },
             buildDonut(ft, size),
-            // Segment value labels overlaid at each arc midpoint (relativePosition from below-canvas)
-            ...valueOverlays,
             // Centered overlay: number + label as a single unit pulled into the donut hole
             {
                 stack: [
@@ -230,34 +208,74 @@ function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; 
     };
 }
 
-// ─── Ministry list (2-column grid, no bars) ───────────────────────────
-function ministryList(items: { label: string; value: number }[]): PdfContent {
-    const rows: PdfContent[] = [];
-    for (let i = 0; i < items.length; i += 2) {
-        const left = items[i];
-        const right = items[i + 1];
-        rows.push({
-            columns: [
-                {
-                    width: '50%',
-                    columns: [
-                        { text: String(left.value), bold: true, fontSize: 11, color: C.textDark, width: 22, alignment: 'right' },
-                        { text: left.label, fontSize: 7, color: C.labelColor, margin: [5, 2, 0, 0] },
-                    ],
-                    margin: [0, 0, 6, 0],
-                },
-                right ? {
-                    width: '50%',
-                    columns: [
-                        { text: String(right.value), bold: true, fontSize: 11, color: C.textDark, width: 22, alignment: 'right' },
-                        { text: right.label, fontSize: 7, color: C.labelColor, margin: [5, 2, 0, 0] },
-                    ],
-                } : { width: '50%', text: '' },
-            ],
-            margin: [0, 3, 0, 3],
+// ─── Ministry grouped list ────────────────────────────────────────────
+function ministryGroupedList(
+    groups: { label: string; items: { label: string; value: number }[] }[],
+    organistasMusicos: number,
+): PdfContent {
+    const stack: PdfContent[] = [];
+    const groupTotals: { label: string; total: number }[] = [];
+
+    for (const group of groups) {
+        const activeItems = group.items.filter(i => i.value > 0);
+        const groupTotal = group.items.reduce((s, i) => s + i.value, 0);
+        groupTotals.push({ label: group.label, total: groupTotal });
+        if (activeItems.length === 0) continue;
+
+        const bodyRows: PdfContent[][] = [
+            [{ text: group.label.toUpperCase(), bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3] }],
+        ];
+        for (const item of activeItems) {
+            bodyRows.push([{
+                columns: [
+                    { text: String(item.value), bold: true, fontSize: 8, color: C.textDark, width: 18, alignment: 'right' },
+                    { text: '  ' + item.label, fontSize: 6.5, color: C.labelColor, margin: [0, 1, 0, 0] },
+                ],
+                margin: [4, 2, 4, 2],
+            }]);
+        }
+
+        stack.push({
+            table: { widths: ['*'], body: bodyRows },
+            layout: {
+                hLineWidth: (i: number) => (i === 0 || i === 1) ? 0.5 : 0.3,
+                vLineWidth: () => 0.5,
+                hLineColor: () => C.tableBorder,
+                vLineColor: () => C.tableBorder,
+            },
+            margin: [0, 0, 0, 3],
         });
     }
-    return { stack: rows };
+
+    // TOTAL table
+    const totalRows: PdfContent[][] = [[
+        { text: 'TOTAL', bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3], colSpan: 2 },
+        {},
+    ]];
+    totalRows.push([
+        { text: 'Organistas e Músicos', fontSize: 6.5, color: C.textDark, bold: true, margin: [4, 2, 0, 2] },
+        { text: String(organistasMusicos), bold: true, fontSize: 6.5, color: C.sectionHeader, alignment: 'center', margin: [0, 2, 4, 2] },
+    ]);
+    for (const gt of groupTotals) {
+        if (gt.total === 0) continue;
+        totalRows.push([
+            { text: gt.label, fontSize: 6.5, color: C.textDark, margin: [4, 2, 0, 2] },
+            { text: String(gt.total), bold: true, fontSize: 6.5, color: C.textDark, alignment: 'center', margin: [0, 2, 4, 2] },
+        ]);
+    }
+
+    stack.push({
+        table: { widths: ['*', 24], body: totalRows },
+        layout: {
+            hLineWidth: (i: number) => (i === 0 || i === 1) ? 0.5 : 0.3,
+            vLineWidth: () => 0.5,
+            hLineColor: () => C.tableBorder,
+            vLineColor: () => C.tableBorder,
+        },
+        margin: [0, 4, 0, 0],
+    });
+
+    return { stack };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -319,13 +337,13 @@ function buildStatisticsDocDef(
     addFamily('METAIS', ft.metais, C.metaisDot, C.metaisBg, STAT_INSTRUMENTS.metais);
     addFamily('ACORDEON', ft.acordeon, C.acordeonDot, C.acordeonBg, STAT_INSTRUMENTS.acordeon);
 
-    // ─── Ministry items for list ──────────────────────────────────────
-    // "Músicos" uses ft.total (sum of all instrument seats) — not the manual stat.musicos field
-    const ministryItems = MINISTRY_FIELDS.map(f => ({
-        label: f.label.replace('Presentes', '').replace('Música', 'Música').trim(),
-        value: f.key === 'musicos'
-            ? ft.total
-            : ((stat[f.key as keyof EventStatistic] as number) || 0),
+    // ─── Ministry items grouped ───────────────────────────────────────
+    const ministryGroups = MINISTRY_GROUPS.map(g => ({
+        label: g.label,
+        items: g.fields.map(f => ({
+            label: f.label,
+            value: (stat[f.key as keyof EventStatistic] as number) || 0,
+        })),
     }));
 
     // ─── Donut content ────────────────────────────────────────────────
@@ -487,27 +505,120 @@ function buildStatisticsDocDef(
                     // ──────────────────────────────────────────────────
                     {
                         width: '40%',
-                        table: {
-                            headerRows: 1,
-                            widths: ['*', 55],
-                            body: [
-                                [
-                                    { text: 'INSTRUMENTOS', bold: true, fontSize: 7, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [4, 3] },
-                                    { text: 'QUANTIDADE', bold: true, fontSize: 7, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [2, 3] },
-                                ],
-                                ...instrumentRows,
-                            ],
-                        },
-                        layout: {
-                            hLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
-                            vLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === node.table.widths.length) ? 0.7 : 0.3,
-                            hLineColor: () => C.tableBorder,
-                            vLineColor: () => C.tableBorder,
-                            paddingLeft: () => 1,
-                            paddingRight: () => 1,
-                            paddingTop: () => 0,
-                            paddingBottom: () => 0,
-                        },
+                        stack: [
+                            {
+                                table: {
+                                    headerRows: 1,
+                                    widths: ['*', 55],
+                                    body: [
+                                        [
+                                            { text: 'INSTRUMENTOS', bold: true, fontSize: 7, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [4, 3] },
+                                            { text: 'QUANTIDADE', bold: true, fontSize: 7, fillColor: C.headerBar, color: C.sectionHeader, alignment: 'center', margin: [2, 3] },
+                                        ],
+                                        ...instrumentRows,
+                                    ],
+                                },
+                                layout: {
+                                    hLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.7 : 0.3,
+                                    vLineWidth: (i: number, node: { table: { body: unknown[]; widths: unknown[] } }) => (i === 0 || i === node.table.widths.length) ? 0.7 : 0.3,
+                                    hLineColor: () => C.tableBorder,
+                                    vLineColor: () => C.tableBorder,
+                                    paddingLeft: () => 1,
+                                    paddingRight: () => 1,
+                                    paddingTop: () => 0,
+                                    paddingBottom: () => 0,
+                                },
+                            },
+                            // Total instruments footer
+                            {
+                                table: {
+                                    widths: ['*', 55],
+                                    body: [[
+                                        { text: 'TOTAL', bold: true, fontSize: 7, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [4, 4] },
+                                        { text: String(ft.total), bold: true, fontSize: 7, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [2, 4] },
+                                    ]],
+                                },
+                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+                                margin: [0, 1, 0, 0],
+                            },
+
+                            // ── ORGANISTAS E MÚSICOS ──────────────────
+                            {
+                                table: {
+                                    widths: ['*'],
+                                    body: [[{
+                                        text: 'ORGANISTAS E MÚSICOS',
+                                        bold: true, fontSize: 7, alignment: 'center',
+                                        fillColor: C.headerBar, color: C.sectionHeader,
+                                        margin: [0, 3, 0, 3],
+                                    }]],
+                                },
+                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+                                margin: [0, 4, 0, 0],
+                            },
+                            {
+                                table: {
+                                    widths: [20, '*'],
+                                    body: [
+                                        [
+                                            { text: String(stat.organistas || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.cardBg },
+                                            { text: `Organista${(stat.organistas || 0) !== 1 ? 's' : ''}`, fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.cardBg },
+                                        ],
+                                        [
+                                            { text: String(ft.total), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.tableZebra },
+                                            { text: 'Músicos', fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.tableZebra },
+                                        ],
+                                    ],
+                                },
+                                layout: {
+                                    hLineWidth: () => 0.3, vLineWidth: () => 0,
+                                    hLineColor: () => C.tableBorder,
+                                },
+                            },
+
+                            // ── HINOS ─────────────────────────────────
+                            {
+                                table: {
+                                    widths: ['*'],
+                                    body: [[{
+                                        text: 'HINOS',
+                                        bold: true, fontSize: 7, alignment: 'center',
+                                        fillColor: C.headerBar, color: C.sectionHeader,
+                                        margin: [0, 3, 0, 3],
+                                    }]],
+                                },
+                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+                                margin: [0, 4, 0, 0],
+                            },
+                            {
+                                table: {
+                                    widths: [20, '*'],
+                                    body: [
+                                        [
+                                            { text: stat.hino_abertura ? '1' : '0', bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.cardBg },
+                                            { text: `Abertura${stat.hino_abertura ? `: ${stat.hino_abertura}` : ''}`, fontSize: 7, color: C.textDark, margin: [2, 2, 0, 2], fillColor: C.cardBg },
+                                        ],
+                                        [
+                                            { text: String(stat.hinos_ensaiados || 0), bold: true, fontSize: 7, color: C.textDark, alignment: 'right', margin: [0, 2, 4, 2], fillColor: C.tableZebra },
+                                            {
+                                                stack: [
+                                                    { text: `Hino${(stat.hinos_ensaiados || 0) !== 1 ? 's' : ''} Ensaiados`, fontSize: 7, color: C.textDark },
+                                                    ...(stat.hinos_ensaiados_lista && stat.hinos_ensaiados_lista.length > 0
+                                                        ? [{ text: stat.hinos_ensaiados_lista.join(', ') + '.', fontSize: 6, color: C.labelColor, margin: [0, 1, 0, 0] }]
+                                                        : []),
+                                                ],
+                                                margin: [2, 2, 0, 2],
+                                                fillColor: C.tableZebra,
+                                            },
+                                        ],
+                                    ],
+                                },
+                                layout: {
+                                    hLineWidth: () => 0.3, vLineWidth: () => 0,
+                                    hLineColor: () => C.tableBorder,
+                                },
+                            },
+                        ],
                     },
 
                     // ──────────────────────────────────────────────────
@@ -553,10 +664,10 @@ function buildStatisticsDocDef(
                                         table: {
                                             widths: ['*'], body: [[{
                                                 stack: [
-                                                    { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 8, 0, 8] },
+                                                    { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
                                                     {
-                                                        ...ministryList(ministryItems),
-                                                        margin: [8, 0, 8, 6],
+                                                        ...ministryGroupedList(ministryGroups, mt.musicosOrganistas),
+                                                        margin: [6, 0, 6, 6],
                                                     },
                                                 ],
                                                 fillColor: C.cardBg,

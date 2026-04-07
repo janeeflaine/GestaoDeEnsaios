@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { X, ChevronRight, Plus, Music, Users, BookOpen, Hash, UserCheck } from 'lucide-react';
-import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_FIELDS, RehearsalEvent, UserRole } from '../types';
+import { EventStatistic, Anciao, Encarregado, Congregation, STAT_INSTRUMENTS, MINISTRY_GROUPS, RehearsalEvent, UserRole } from '../types';
 import { calcFamilyTotals, calcFamilyPercentages, calcMinistryTotals, emptyStatistic } from '../utils/orchestraCalculations';
 import { supabase } from '../supabaseClient';
 import { insertStatistic, updateStatistic } from '../services/statistics';
@@ -46,10 +46,9 @@ export default function StatisticsForm({
     const [showEncModal, setShowEncModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [ancipaoInput, setAnciaoInput] = useState('');
-    const [hinosEnsaiadosList, setHinosEnsaiadosList] = useState<number[]>(() => {
-        // On edit, we only have the count — can't reconstruct the list
-        return [];
-    });
+    const [hinosEnsaiadosList, setHinosEnsaiadosList] = useState<number[]>(
+        () => editingStat?.hinos_ensaiados_lista ?? [],
+    );
     const [hinoInput, setHinoInput] = useState('');
     const hinoInputRef = useRef<HTMLInputElement>(null);
     // Custom enc. regionais for non-admin (local only)
@@ -84,7 +83,7 @@ export default function StatisticsForm({
         if (hinosEnsaiadosList.includes(n)) { setHinoInput(''); hinoInputRef.current?.focus(); return; }
         const next = [...hinosEnsaiadosList, n].sort((a, b) => a - b);
         setHinosEnsaiadosList(next);
-        setStat(prev => ({ ...prev, hinos_ensaiados: next.length }));
+        setStat(prev => ({ ...prev, hinos_ensaiados: next.length, hinos_ensaiados_lista: next }));
         setHinoInput('');
         hinoInputRef.current?.focus();
     };
@@ -92,7 +91,7 @@ export default function StatisticsForm({
     const removeHino = (n: number) => {
         const next = hinosEnsaiadosList.filter(h => h !== n);
         setHinosEnsaiadosList(next);
-        setStat(prev => ({ ...prev, hinos_ensaiados: next.length }));
+        setStat(prev => ({ ...prev, hinos_ensaiados: next.length, hinos_ensaiados_lista: next }));
     };
 
     const handleHinoKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -446,31 +445,34 @@ export default function StatisticsForm({
                         <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
                             <Users size={16} /> Ministério e Administração
                         </h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {MINISTRY_FIELDS.map(field => {
-                                if (field.key === 'musicos') {
-                                    return (
+                        {/* Organistas standalone */}
+                        <div className="space-y-1 max-w-[200px]">
+                            <label className="text-[11px] text-slate-400 font-bold block">Organistas</label>
+                            <input
+                                type="number" min="0" placeholder="0"
+                                value={stat.organistas || ''}
+                                onChange={e => updateField('organistas', e.target.value ? parseInt(e.target.value) : 0)}
+                                className={inputClass}
+                            />
+                        </div>
+                        {MINISTRY_GROUPS.map(group => (
+                            <div key={group.label} className="space-y-2">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    {group.fields.map(field => (
                                         <div key={field.key} className="space-y-1 min-w-0">
                                             <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
-                                            <div className={`${inputClass} bg-slate-100 text-slate-500 cursor-default select-none flex items-center`} title="Calculado automaticamente a partir dos instrumentos">
-                                                {familyTotals.total}
-                                            </div>
+                                            <input
+                                                type="number" min="0" placeholder="0"
+                                                value={(stat[field.key as keyof EventStatistic] as number) || ''}
+                                                onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
+                                                className={inputClass}
+                                            />
                                         </div>
-                                    );
-                                }
-                                return (
-                                    <div key={field.key} className="space-y-1 min-w-0">
-                                        <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
-                                        <input
-                                            type="number" min="0" placeholder="0"
-                                            value={(stat[field.key as keyof EventStatistic] as number) || ''}
-                                            onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                         <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 grid grid-cols-2 gap-4 text-center shadow-inner">
                             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
                                 <p className="text-3xl font-black text-indigo-600">{ministryTotals.musicosOrganistas}</p>

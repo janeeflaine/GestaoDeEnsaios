@@ -150,6 +150,7 @@ export interface EventStatistic {
   palavra?: string;
   hino_abertura?: number;
   hinos_ensaiados?: number;
+  hinos_ensaiados_lista?: number[];
   created_by?: string;
   created_at?: string;
   share_token?: string;
@@ -166,10 +167,22 @@ export interface EventStatistic {
   trombone: number; trombonito: number; baritono: number; eufonio: number; tuba: number;
   // Acordeon
   acordeon: number;
+  // Ministério (auto-calc)
+  musicos: number; organistas: number;
   // Ministério
-  musicos: number; organistas: number; anciaes_presentes: number; diaconos: number;
-  coop_oficio: number; coop_jovens: number; enc_regionais_presentes: number;
-  enc_locais: number; examinadoras: number; secretarios_musica: number; instrutores: number;
+  anciaes_presentes: number; diaconos: number; coop_oficio: number; coop_jovens: number;
+  // Encarregados Musicais
+  enc_regionais_presentes: number; examinadoras: number;
+  // Legacy (kept for DB compat)
+  enc_locais: number;
+  // GEM
+  secretarios_gem: number; secretaria_gem: number; instrutores: number; instrutoras: number;
+  candidatas: number; candidatos: number;
+  // Colaboradores
+  secretarios_musica: number; secretaria_musica: number; auxiliar_porta: number;
+  colaborador: number; colaboradora: number;
+  // Irmandade
+  irmas: number; irmaos: number;
 }
 
 export interface PendingAnciao {
@@ -244,16 +257,52 @@ export const STAT_INSTRUMENTS = {
   ],
 } as const;
 
-export const MINISTRY_FIELDS = [
-  { key: 'musicos', label: 'Músicos' },
-  { key: 'organistas', label: 'Organistas' },
-  { key: 'anciaes_presentes', label: 'Anciães' },
-  { key: 'diaconos', label: 'Diáconos' },
-  { key: 'coop_oficio', label: 'Coop. do Ofício' },
-  { key: 'coop_jovens', label: 'Coop. de Jovens' },
-  { key: 'enc_regionais_presentes', label: 'Enc. Regionais' },
-  { key: 'enc_locais', label: 'Enc. Locais' },
-  { key: 'examinadoras', label: 'Examinadoras' },
-  { key: 'secretarios_musica', label: 'Secretários da Música' },
-  { key: 'instrutores', label: 'Instrutores / Instrutoras' },
+export const MINISTRY_GROUPS = [
+  {
+    label: 'Ministério',
+    fields: [
+      { key: 'anciaes_presentes', label: 'Anciões' },
+      { key: 'diaconos', label: 'Diáconos' },
+      { key: 'coop_oficio', label: 'Cooperador do O. M.' },
+      { key: 'coop_jovens', label: 'Cooperador de J. e M.' },
+    ],
+  },
+  {
+    label: 'Encarregados Musicais',
+    fields: [
+      { key: 'enc_regionais_presentes', label: 'Encarregado Regional' },
+      { key: 'examinadoras', label: 'Examinadora' },
+    ],
+  },
+  {
+    label: 'GEM',
+    fields: [
+      { key: 'secretarios_gem', label: 'Secretários do GEM' },
+      { key: 'secretaria_gem', label: 'Secretária do GEM' },
+      { key: 'instrutores', label: 'Instrutores' },
+      { key: 'instrutoras', label: 'Instrutoras' },
+      { key: 'candidatas', label: 'Candidatas' },
+      { key: 'candidatos', label: 'Candidatos' },
+    ],
+  },
+  {
+    label: 'Colaboradores',
+    fields: [
+      { key: 'secretarios_musica', label: 'Secretário da Música' },
+      { key: 'secretaria_musica', label: 'Secretária da Música' },
+      { key: 'auxiliar_porta', label: 'Auxiliar na Porta' },
+      { key: 'colaborador', label: 'Colaborador' },
+      { key: 'colaboradora', label: 'Colaboradora' },
+    ],
+  },
+  {
+    label: 'Irmandade',
+    fields: [
+      { key: 'irmas', label: 'Irmãs' },
+      { key: 'irmaos', label: 'Irmãos' },
+    ],
+  },
 ] as const;
+
+/** Flat list of all ministry field keys (for backward compat / PDF) */
+export const MINISTRY_FIELDS = MINISTRY_GROUPS.flatMap(g => g.fields);

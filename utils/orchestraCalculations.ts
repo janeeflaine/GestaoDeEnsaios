@@ -58,11 +58,20 @@ export function calcIdealComparison(totals: OrchestraFamilyTotals) {
 export function calcMinistryTotals(stat: EventStatistic) {
     const musicosOrganistas = (stat.musicos || 0) + (stat.organistas || 0);
     const totalGeral = musicosOrganistas +
+        // Ministério
         (stat.anciaes_presentes || 0) + (stat.diaconos || 0) +
         (stat.coop_oficio || 0) + (stat.coop_jovens || 0) +
-        (stat.enc_regionais_presentes || 0) + (stat.enc_locais || 0) +
-        (stat.examinadoras || 0) + (stat.secretarios_musica || 0) +
-        (stat.instrutores || 0);
+        // Encarregados Musicais
+        (stat.enc_regionais_presentes || 0) + (stat.examinadoras || 0) +
+        // GEM
+        (stat.secretarios_gem || 0) + (stat.secretaria_gem || 0) +
+        (stat.instrutores || 0) + (stat.instrutoras || 0) +
+        (stat.candidatas || 0) + (stat.candidatos || 0) +
+        // Colaboradores
+        (stat.secretarios_musica || 0) + (stat.secretaria_musica || 0) +
+        (stat.auxiliar_porta || 0) + (stat.colaborador || 0) + (stat.colaboradora || 0) +
+        // Irmandade
+        (stat.irmas || 0) + (stat.irmaos || 0);
 
     return { musicosOrganistas, totalGeral };
 }
@@ -80,8 +89,14 @@ export function emptyStatistic(): EventStatistic {
         trompete: 0, cornet: 0, flugelhorn: 0, trompa: 0,
         trombone: 0, trombonito: 0, baritono: 0, eufonio: 0, tuba: 0,
         acordeon: 0,
-        musicos: 0, organistas: 0, anciaes_presentes: 0, diaconos: 0,
-        coop_oficio: 0, coop_jovens: 0, enc_regionais_presentes: 0,
-        enc_locais: 0, examinadoras: 0, secretarios_musica: 0, instrutores: 0,
+        musicos: 0, organistas: 0,
+        anciaes_presentes: 0, diaconos: 0, coop_oficio: 0, coop_jovens: 0,
+        enc_regionais_presentes: 0, examinadoras: 0,
+        enc_locais: 0,
+        secretarios_gem: 0, secretaria_gem: 0, instrutores: 0, instrutoras: 0,
+        candidatas: 0, candidatos: 0,
+        secretarios_musica: 0, secretaria_musica: 0, auxiliar_porta: 0,
+        colaborador: 0, colaboradora: 0,
+        irmas: 0, irmaos: 0,
     };
 }
