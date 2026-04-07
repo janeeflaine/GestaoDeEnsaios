@@ -102,12 +102,10 @@ function categoryCard(
 }
 
 // ─── Donut chart via canvas polyline arcs (returns canvas only) ───────
-// Segments have a small angular gap between them; center is a dark navy circle.
 function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 100): PdfContent {
     const cx = size / 2, cy = size / 2;
-    const outerR = size / 2 - 2, innerR = outerR * 0.44;
+    const outerR = size / 2 - 4, innerR = outerR * 0.5;
     const total = ft.total || 1;
-    const gapAngle = 0.07; // radians gap between each segment
 
     const segments = [
         { value: ft.cordas, color: C.cordasAccent },
@@ -116,106 +114,118 @@ function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acor
         { value: ft.acordeon, color: C.acordeonAccent },
     ];
 
-    const activeCount = segments.filter(s => s.value > 0).length;
     const shapes: PdfContent[] = [];
     let startAngle = -Math.PI / 2;
 
     segments.forEach(seg => {
-        if (seg.value <= 0) { startAngle += (seg.value / total) * 2 * Math.PI; return; }
-        const fullSweep = (seg.value / total) * 2 * Math.PI;
-        const gap = activeCount > 1 ? gapAngle : 0;
-        const sweep = fullSweep - gap;
-        const actualStart = startAngle + gap / 2;
-        if (sweep <= 0) { startAngle += fullSweep; return; }
+        if (seg.value <= 0) return;
+        const sweep = (seg.value / total) * 2 * Math.PI;
         const steps = Math.max(16, Math.round(sweep * 20));
         const points: { x: number; y: number }[] = [];
         for (let i = 0; i <= steps; i++) {
-            const a = actualStart + (sweep * i) / steps;
+            const a = startAngle + (sweep * i) / steps;
             points.push({ x: cx + outerR * Math.cos(a), y: cy + outerR * Math.sin(a) });
         }
         for (let i = steps; i >= 0; i--) {
-            const a = actualStart + (sweep * i) / steps;
+            const a = startAngle + (sweep * i) / steps;
             points.push({ x: cx + innerR * Math.cos(a), y: cy + innerR * Math.sin(a) });
         }
         shapes.push({ type: 'polyline', points, closePath: true, color: seg.color });
-        startAngle += fullSweep;
+        startAngle += sweep;
     });
 
-    // Dark navy center circle
-    shapes.push({ type: 'ellipse', x: cx, y: cy, r1: innerR - 2, r2: innerR - 2, color: C.darkCard });
+    // White center circle
+    shapes.push({ type: 'ellipse', x: cx, y: cy, r1: innerR - 1, r2: innerR - 1, color: '#FFFFFF' });
 
     return { canvas: shapes, width: size, height: size, alignment: 'center' };
 }
 
-// ─── Donut card — reference-style with side category labels ────────────
-// Layout: [left labels] | [donut + center overlay] | [right labels]
-// Left:  Cordas (top) + Metais (bottom)
-// Right: Madeiras (top) + Acordeon (bottom)
+// ─── Donut card with centered total and legend with values ─────────────
 function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }): PdfContent {
     const size = 100;
-    // Math: canvas=100, dark circle center=50, innerR≈42*0.44-2≈16.5
-    // Text block: 16pt num≈20px + 5pt label≈7px + gap1 = 28px → starts at 50-14=36
-    // pullUp = -(100-36) = -64, compensate = 100-36-28 = 36
-    const pullUp = -64;
-    const compensate = 36;
+    const cx = size / 2, cy = size / 2;
+    const outerR = size / 2 - 4, innerR = outerR * 0.5;
+    const midR = (outerR + innerR) / 2; // radius at segment midpoint for label placement
+    const total = ft.total || 1;
 
-    // Side label: colored indicator + category name + large colored number
-    const sideLabel = (color: string, name: string, val: number, align: 'left' | 'right'): PdfContent => ({
-        stack: [
+    // Pull the number+label stack up so it visually centers in the donut hole.
+    // After canvas (size=100), cursor is at bottom. Center is at 50.
+    // numBlock ≈ 20px (18pt) + 1 + 8px (6pt) = 29px → starts at 50-14 = 36
+    // pullUp = -(100-36) = -64, compensate bottom = 100-36-29 = 35
+    const pullUp = -64;
+    const compensate = 35;
+
+    // Compute value label overlays positioned at each segment's arc midpoint.
+    // Each element uses relativePosition (relative to "below canvas" in flow) + negative
+    // bottom margin to cancel its line-height contribution from the flow.
+    const segDefs = [
+        { value: ft.cordas },
+        { value: ft.madeiras },
+        { value: ft.metais },
+        { value: ft.acordeon },
+    ];
+    const valueOverlays: PdfContent[] = [];
+    let startAngle = -Math.PI / 2;
+    segDefs.forEach(seg => {
+        const sweep = (seg.value / total) * 2 * Math.PI;
+        if (seg.value > 0) {
+            const midAngle = startAngle + sweep / 2;
+            const tx = cx + midR * Math.cos(midAngle);
+            const ty = cy + midR * Math.sin(midAngle);
+            valueOverlays.push({
+                text: String(seg.value),
+                fontSize: 7,
+                bold: true,
+                color: '#FFFFFF',
+                relativePosition: { x: Math.round(tx - 4), y: Math.round(ty - size) },
+                margin: [0, 0, 0, -11], // cancel flow height so cursor stays at canvas bottom
+            });
+        }
+        startAngle += sweep;
+    });
+
+    const legendRow = (
+        leftColor: string, leftLabel: string, leftVal: number,
+        rightColor: string, rightLabel: string, rightVal: number,
+    ): PdfContent => ({
+        columns: [
             {
-                columns: align === 'left' ? [
-                    { canvas: [{ type: 'rect', x: 0, y: 1.5, w: 7, h: 7, r: 1, color }], width: 9 },
-                    { text: name, fontSize: 5.5, color: C.labelColor, bold: true, margin: [1, 0, 0, 0] },
-                ] : [
-                    { text: name, fontSize: 5.5, color: C.labelColor, bold: true, alignment: 'right', width: '*', margin: [0, 0, 2, 0] },
-                    { canvas: [{ type: 'rect', x: 0, y: 1.5, w: 7, h: 7, r: 1, color }], width: 9 },
+                width: '50%',
+                columns: [
+                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: leftColor }], width: 10 },
+                    { text: leftLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
+                    { text: String(leftVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
+                ],
+                margin: [0, 0, 6, 0],
+            },
+            {
+                width: '50%',
+                columns: [
+                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: rightColor }], width: 10 },
+                    { text: rightLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
+                    { text: String(rightVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
                 ],
             },
-            { text: String(val), fontSize: 18, bold: true, color, alignment: align, margin: [0, 1, 0, 0] },
         ],
     });
 
     return {
         stack: [
-            { text: 'TOTAL DE MÚSICOS POR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 4] },
+            { text: 'TOTAL DE MÚSICOS POR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 8] },
+            buildDonut(ft, size),
+            // Segment value labels overlaid at each arc midpoint (relativePosition from below-canvas)
+            ...valueOverlays,
+            // Centered overlay: number + label as a single unit pulled into the donut hole
             {
-                columns: [
-                    // Left column: Cordas (top-ish) + spacer + Metais (bottom-ish)
-                    {
-                        width: '*',
-                        stack: [
-                            sideLabel(C.cordasAccent, 'Cordas', ft.cordas, 'left'),
-                            { text: '', margin: [0, 18, 0, 0] },
-                            sideLabel(C.metaisAccent, 'Metais', ft.metais, 'left'),
-                        ],
-                        margin: [4, 8, 0, 0],
-                    },
-                    // Center: canvas + white text overlaid on dark center
-                    {
-                        width: size,
-                        stack: [
-                            buildDonut(ft, size),
-                            {
-                                stack: [
-                                    { text: String(ft.total), fontSize: 16, bold: true, color: '#FFFFFF', alignment: 'center' },
-                                    { text: 'TOTAL', fontSize: 5, bold: true, color: '#94A3B8', alignment: 'center', margin: [0, 0, 0, 0] },
-                                ],
-                                margin: [0, pullUp, 0, compensate],
-                            },
-                        ],
-                    },
-                    // Right column: Madeiras (top-ish) + spacer + Acordeon (bottom-ish)
-                    {
-                        width: '*',
-                        stack: [
-                            sideLabel(C.madeirasAccent, 'Madeiras', ft.madeiras, 'right'),
-                            { text: '', margin: [0, 18, 0, 0] },
-                            sideLabel(C.acordeonAccent, 'Acordeon', ft.acordeon, 'right'),
-                        ],
-                        margin: [0, 8, 4, 0],
-                    },
+                stack: [
+                    { text: String(ft.total), fontSize: 20, bold: true, color: C.textDark, alignment: 'center' },
+                    { text: 'TOTAL', fontSize: 5.5, bold: true, color: C.labelColor, alignment: 'center', margin: [0, 1, 0, 0] },
                 ],
+                margin: [0, pullUp, 0, compensate],
             },
+            // Legend: 2 rows × 2 columns, each with color square | name | value
+            { ...legendRow(C.cordasAccent, 'Cordas', ft.cordas, C.madeirasAccent, 'Madeiras', ft.madeiras), margin: [8, 6, 8, 2] },
+            { ...legendRow(C.metaisAccent, 'Metais', ft.metais, C.acordeonAccent, 'Acordeon', ft.acordeon), margin: [8, 0, 8, 8] },
         ],
     };
 }
