@@ -115,95 +115,68 @@ function categoryCard(
     };
 }
 
-// ─── Donut chart via canvas polyline arcs (returns canvas only) ───────
-function buildDonut(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }, size = 100): PdfContent {
-    const cx = size / 2, cy = size / 2;
-    const outerR = size / 2 - 4, innerR = outerR * 0.5;
-    const total = ft.total || 1;
+// ─── Bar Chart Card (Compares Real vs Ideal) ─────────────────────────
+function buildBarChartCard(pct: { cordas: number; madeiras: number; metais: number; acordeon: number }): PdfContent {
+    const height = 90;
+    const width = 160;
 
-    const segments = [
-        { value: ft.cordas, color: C.cordasAccent },
-        { value: ft.madeiras, color: C.madeirasAccent },
-        { value: ft.metais, color: C.metaisAccent },
-        { value: ft.acordeon, color: C.acordeonAccent },
+    // Four categories
+    const categories = [
+        { label: 'Cordas', real: pct.cordas, ideal: 50, color: C.cordasAccent },
+        { label: 'Madeiras', real: pct.madeiras, ideal: 25, color: C.madeirasAccent },
+        { label: 'Metais', real: pct.metais, ideal: 25, color: C.metaisAccent },
+        { label: 'Acordeon', real: pct.acordeon, ideal: 0, color: C.acordeonAccent },
     ];
 
+    const barWidth = 20;
+    const spacing = (width - (4 * barWidth)) / 5;
+
     const shapes: PdfContent[] = [];
-    let startAngle = -Math.PI / 2;
 
-    segments.forEach(seg => {
-        if (seg.value <= 0) return;
-        const sweep = (seg.value / total) * 2 * Math.PI;
-        const steps = Math.max(16, Math.round(sweep * 20));
-        const points: { x: number; y: number }[] = [];
-        for (let i = 0; i <= steps; i++) {
-            const a = startAngle + (sweep * i) / steps;
-            points.push({ x: cx + outerR * Math.cos(a), y: cy + outerR * Math.sin(a) });
+    // Background lines (25%, 50%, 75%, 100%)
+    for (let i = 0; i <= 4; i++) {
+        const y = height - (i * 22.5);
+        shapes.push({ type: 'line', x1: 0, y1: y, x2: width, y2: y, lineWidth: 0.5, lineColor: '#E0E0E0' });
+    }
+
+    // Bars and Ideal markers
+    categories.forEach((cat, idx) => {
+        const x = spacing + (idx * (barWidth + spacing));
+        const barHeight = Math.max((cat.real / 100) * height, 0);
+        // Ensure bar height doesn't exceed container
+        const finalBarHeight = Math.min(barHeight, height);
+        const y = height - finalBarHeight;
+
+        if (finalBarHeight > 0) {
+            shapes.push({ type: 'rect', x, y, w: barWidth, h: finalBarHeight, color: cat.color });
         }
-        for (let i = steps; i >= 0; i--) {
-            const a = startAngle + (sweep * i) / steps;
-            points.push({ x: cx + innerR * Math.cos(a), y: cy + innerR * Math.sin(a) });
+
+        if (cat.ideal > 0) {
+            const idealY = height - ((cat.ideal / 100) * height);
+            shapes.push({ type: 'line', x1: x - 4, y1: idealY, x2: x + barWidth + 4, y2: idealY, lineWidth: 2, lineColor: '#1E293B', lineCap: 'round' });
         }
-        shapes.push({ type: 'polyline', points, closePath: true, color: seg.color });
-        startAngle += sweep;
-    });
-
-    // White center circle
-    shapes.push({ type: 'ellipse', x: cx, y: cy, r1: innerR - 1, r2: innerR - 1, color: '#FFFFFF' });
-
-    return { canvas: shapes, width: size, height: size, alignment: 'center' };
-}
-
-// ─── Donut card with centered total and legend with values ─────────────
-function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; acordeon: number; total: number }): PdfContent {
-    const size = 100;
-    // Pull the number+label stack up so it visually centers in the donut hole.
-    // After canvas (size=100), cursor is at bottom. Center is at 50.
-    // numBlock ≈ 20px (18pt) + 1 + 8px (6pt) = 29px → starts at 50-14 = 36
-    // pullUp = -(100-36) = -64, compensate bottom = 100-36-29 = 35
-    const pullUp = -64;
-    const compensate = 35;
-
-    const legendRow = (
-        leftColor: string, leftLabel: string, leftVal: number,
-        rightColor: string, rightLabel: string, rightVal: number,
-    ): PdfContent => ({
-        columns: [
-            {
-                width: '50%',
-                columns: [
-                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: leftColor }], width: 10 },
-                    { text: leftLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
-                    { text: String(leftVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
-                ],
-                margin: [0, 0, 6, 0],
-            },
-            {
-                width: '50%',
-                columns: [
-                    { canvas: [{ type: 'rect', x: 0, y: 2, w: 7, h: 7, r: 1, color: rightColor }], width: 10 },
-                    { text: rightLabel, fontSize: 6.5, color: C.labelColor, width: '*', margin: [1, 1, 0, 0] },
-                    { text: String(rightVal), fontSize: 7, bold: true, color: C.textDark, width: 14, alignment: 'right', margin: [0, 1, 0, 0] },
-                ],
-            },
-        ],
     });
 
     return {
         stack: [
-            { text: 'TOTAL DE MÚSICOS POR CATEGORIA', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 8] },
-            buildDonut(ft, size),
-            // Centered overlay: number + label as a single unit pulled into the donut hole
+            { text: 'COMPARAÇÃO % REAL VS IDEAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
             {
-                stack: [
-                    { text: String(ft.total), fontSize: 20, bold: true, color: C.textDark, alignment: 'center' },
-                    { text: 'TOTAL', fontSize: 5.5, bold: true, color: C.labelColor, alignment: 'center', margin: [0, 1, 0, 0] },
-                ],
-                margin: [0, pullUp, 0, compensate],
+                canvas: shapes,
+                width: width,
+                height: height,
+                alignment: 'center',
+                margin: [0, 5, 0, 4]
             },
-            // Legend: 2 rows × 2 columns, each with color square | name | value
-            { ...legendRow(C.cordasAccent, 'Cordas', ft.cordas, C.madeirasAccent, 'Madeiras', ft.madeiras), margin: [8, 6, 8, 2] },
-            { ...legendRow(C.metaisAccent, 'Metais', ft.metais, C.acordeonAccent, 'Acordeon', ft.acordeon), margin: [8, 0, 8, 8] },
+            {
+                columns: categories.map(c => ({
+                    stack: [
+                        { text: `${c.real}%`, fontSize: 7, bold: true, color: c.color, alignment: 'center' },
+                        { text: c.label, fontSize: 6, bold: true, color: C.labelColor, alignment: 'center' }
+                    ],
+                    width: '*'
+                })),
+                margin: [4, 0, 4, 8]
+            }
         ],
     };
 }
@@ -352,8 +325,8 @@ function buildStatisticsDocDef(
         })),
     }));
 
-    // ─── Donut content ────────────────────────────────────────────────
-    const donutContent = buildDonutCard(ft);
+    // ─── Bar Chart content ────────────────────────────────────────────
+    const barChartContent = buildBarChartCard(pct);
 
     // ═══════════════════════════════════════════════════════════════════
     // DOCUMENT
@@ -440,21 +413,9 @@ function buildStatisticsDocDef(
                             widths: ['*'], body: [[{
                                 stack: [
                                     {
-                                        columns: [
-                                            {
-                                                stack: [
-                                                    { text: 'HINOS', fontSize: 6, bold: true, color: C.labelColor },
-                                                    { text: `Abertura: ${stat.hino_abertura || '-'}`, fontSize: 7, color: C.textDark, margin: [0, 2, 0, 0] },
-                                                ],
-                                                width: '*',
-                                            },
-                                            {
-                                                stack: [
-                                                    { text: '', fontSize: 6 },
-                                                    { text: `Ensaiados: ${stat.hinos_ensaiados || '-'}`, fontSize: 7, color: C.textDark, margin: [0, 2, 0, 0] },
-                                                ],
-                                                width: '*',
-                                            },
+                                        stack: [
+                                            { text: 'ENC. REG./LOCAL:', fontSize: 6, bold: true, color: C.labelColor, margin: [0, 0, 0, 1] },
+                                            { text: `IR. ${(stat.enc_regionais_nomes_custom?.join(', ') || '-').toUpperCase()}`, fontSize: 8, bold: true, color: C.textDark },
                                         ],
                                     },
                                 ],
@@ -636,6 +597,20 @@ function buildStatisticsDocDef(
                                     hLineColor: () => C.tableBorder,
                                 },
                             },
+                            // ──────────────────────────────────────────────────
+                            // NEW GRAPHIC: Bar Chart (now placed below Hinos)
+                            // ──────────────────────────────────────────────────
+                            {
+                                table: {
+                                    widths: ['*'],
+                                    body: [[{
+                                        ...barChartContent,
+                                        fillColor: C.cardBg,
+                                    }]]
+                                },
+                                layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
+                                margin: [0, 4, 0, 0],
+                            },
                         ],
                     },
 
@@ -661,40 +636,22 @@ function buildStatisticsDocDef(
                                 margin: [0, 0, 0, 5],
                             },
 
-                            // === Row 2: Donut + Ministry Bars ===
+                            // === Row 2: Ministry Bars (Now 100% width) ===
                             {
-                                columns: [
-                                    // Donut Chart Card
-                                    {
-                                        width: '50%',
-                                        table: {
-                                            widths: ['*'], body: [[{
-                                                ...donutContent,
-                                                fillColor: C.cardBg,
-                                            }]]
-                                        },
-                                        layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
-                                    },
-
-                                    // Ministry List Card
-                                    {
-                                        width: '50%',
-                                        table: {
-                                            widths: ['*'], body: [[{
-                                                stack: [
-                                                    { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
-                                                    {
-                                                        ...ministryGroupedList(ministryGroups, mt.musicosOrganistas),
-                                                        margin: [6, 0, 6, 6],
-                                                    },
-                                                ],
-                                                fillColor: C.cardBg,
-                                            }]]
-                                        },
-                                        layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
-                                        margin: [4, 0, 0, 0],
-                                    },
-                                ],
+                                // Ministry List Card
+                                table: {
+                                    widths: ['*'], body: [[{
+                                        stack: [
+                                            { text: 'PESSOAL ADICIONAL', fontSize: 7, bold: true, color: C.sectionHeader, alignment: 'center', margin: [0, 6, 0, 6] },
+                                            {
+                                                ...ministryGroupedList(ministryGroups, mt.musicosOrganistas),
+                                                margin: [6, 0, 6, 6],
+                                            },
+                                        ],
+                                        fillColor: C.cardBg,
+                                    }]]
+                                },
+                                layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, hLineColor: () => C.tableBorder, vLineColor: () => C.tableBorder },
                                 margin: [0, 0, 0, 5],
                             },
                         ],
@@ -786,16 +743,18 @@ export function generatePresencePDF(
         content: [
             // Header
             {
-                table: { widths: ['*'], body: [[{
-                    stack: [
-                        { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
-                        { text: 'LISTA DE PRESENÇA', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center', margin: [0, 0, 0, 2] },
-                        { text: event.location, fontSize: 9, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, 2] },
-                        { text: `${event.day}${event.month ? ' de ' + event.month : ''}${event.time ? ' — ' + event.time : ''}`, fontSize: 8, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, event.conductor ? 2 : 8] },
-                        ...(event.conductor ? [{ text: `Maestro: ${event.conductor}`, fontSize: 8, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] }] : []),
-                    ],
-                    fillColor: C.cardBg,
-                }]] },
+                table: {
+                    widths: ['*'], body: [[{
+                        stack: [
+                            { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
+                            { text: 'LISTA DE PRESENÇA', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center', margin: [0, 0, 0, 2] },
+                            { text: event.location, fontSize: 9, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, 2] },
+                            { text: `${event.day}${event.month ? ' de ' + event.month : ''}${event.time ? ' — ' + event.time : ''}`, fontSize: 8, color: C.labelColor, alignment: 'center', margin: [0, 0, 0, event.conductor ? 2 : 8] },
+                            ...(event.conductor ? [{ text: `Maestro: ${event.conductor}`, fontSize: 8, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] }] : []),
+                        ],
+                        fillColor: C.cardBg,
+                    }]]
+                },
                 layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
                 margin: [0, 0, 0, 10],
             },
@@ -857,15 +816,17 @@ export function generateSchedulePDF(
     const content: PdfContent[] = [
         // Title header
         {
-            table: { widths: ['*'], body: [[{
-                stack: [
-                    { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
-                    ...(congregationName ? [{ text: congregationName.toUpperCase(), fontSize: 9, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] }] : []),
-                    { text: 'CRONOGRAMA DE ENSAIOS', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] },
-                    { text: String(year), fontSize: 9, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] },
-                ],
-                fillColor: C.cardBg,
-            }]] },
+            table: {
+                widths: ['*'], body: [[{
+                    stack: [
+                        { text: 'CONGREGAÇÃO CRISTÃ NO BRASIL', fontSize: 14, bold: true, color: C.titleColor, alignment: 'center', margin: [0, 10, 0, 3] },
+                        ...(congregationName ? [{ text: congregationName.toUpperCase(), fontSize: 9, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] }] : []),
+                        { text: 'CRONOGRAMA DE ENSAIOS', fontSize: 11, bold: true, color: C.subtitleColor, alignment: 'center' as const, margin: [0, 0, 0, 2] },
+                        { text: String(year), fontSize: 9, color: C.labelColor, alignment: 'center' as const, margin: [0, 0, 0, 8] },
+                    ],
+                    fillColor: C.cardBg,
+                }]]
+            },
             layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
             margin: [0, 0, 0, 12],
         } as PdfContent,
@@ -877,12 +838,14 @@ export function generateSchedulePDF(
 
         // Month section header
         content.push({
-            table: { widths: ['*'], body: [[{
-                text: month.toUpperCase(),
-                bold: true, fontSize: 9, alignment: 'center',
-                fillColor: C.headerBar, color: C.sectionHeader,
-                margin: [0, 4, 0, 4],
-            }]] },
+            table: {
+                widths: ['*'], body: [[{
+                    text: month.toUpperCase(),
+                    bold: true, fontSize: 9, alignment: 'center',
+                    fillColor: C.headerBar, color: C.sectionHeader,
+                    margin: [0, 4, 0, 4],
+                }]]
+            },
             layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
             margin: [0, 6, 0, 2],
         } as PdfContent);
