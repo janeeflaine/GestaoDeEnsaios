@@ -458,18 +458,58 @@ export default function StatisticsForm({
                         {MINISTRY_GROUPS.map(group => (
                             <div key={group.label} className="space-y-2">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                    {group.fields.map(field => (
-                                        <div key={field.key} className="space-y-1 min-w-0">
-                                            <label className="text-[11px] text-slate-400 font-bold truncate block" title={field.label}>{field.label}</label>
-                                            <input
-                                                type="number" min="0" placeholder="0"
-                                                value={(stat[field.key as keyof EventStatistic] as number) || ''}
-                                                onChange={e => updateField(field.key, e.target.value ? parseInt(e.target.value) : 0)}
-                                                className={inputClass}
-                                            />
-                                        </div>
-                                    ))}
+                                <div className="space-y-2">
+                                    {group.fields.map(field => {
+                                        const presentes = (stat[field.key as keyof EventStatistic] as number) || 0;
+                                        const tocaram = (stat[field.tocKey as keyof EventStatistic] as number) || 0;
+                                        const naoTocaram = Math.max(0, presentes - tocaram);
+                                        const hasTocaram = tocaram > 0;
+                                        return (
+                                            <div
+                                                key={field.key}
+                                                className={`rounded-2xl border p-3 transition-colors ${hasTocaram ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 bg-white'}`}
+                                            >
+                                                <p className="text-[11px] text-slate-500 font-bold mb-2 truncate" title={field.label}>{field.label}</p>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-slate-400 uppercase tracking-wide block">Presentes</label>
+                                                        <input
+                                                            type="number" min="0" placeholder="0"
+                                                            value={presentes || ''}
+                                                            onChange={e => {
+                                                                const v = e.target.value ? parseInt(e.target.value) : 0;
+                                                                updateField(field.key, v);
+                                                                // clamp tocaram if presentes decreased
+                                                                if (tocaram > v) updateField(field.tocKey, v);
+                                                            }}
+                                                            className={inputClass}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] text-indigo-500 uppercase tracking-wide block font-bold">Tocaram</label>
+                                                        <input
+                                                            type="number" min="0" max={presentes}
+                                                            placeholder="0"
+                                                            value={tocaram || ''}
+                                                            onChange={e => {
+                                                                const v = e.target.value ? parseInt(e.target.value) : 0;
+                                                                updateField(field.tocKey, Math.min(v, presentes));
+                                                            }}
+                                                            className={`${inputClass} ${hasTocaram ? 'border-indigo-300 focus:ring-indigo-400' : ''}`}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {presentes > 0 && (
+                                                    <p className="text-[10px] mt-2 text-slate-400">
+                                                        {hasTocaram
+                                                            ? <><span className="text-indigo-500 font-bold">{tocaram} tocaram</span> · <span className="font-bold text-slate-600">{naoTocaram} no total geral</span></>
+                                                            : <span className="text-slate-500">{presentes} no total geral</span>
+                                                        }
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}

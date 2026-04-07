@@ -57,21 +57,34 @@ export function calcIdealComparison(totals: OrchestraFamilyTotals) {
  */
 export function calcMinistryTotals(stat: EventStatistic) {
     const musicosOrganistas = (stat.musicos || 0) + (stat.organistas || 0);
+    // Only count members who did NOT play (those who played are already counted in musicosOrganistas)
+    const naoToc = (presKey: keyof EventStatistic, tocKey: keyof EventStatistic) =>
+        Math.max(0, (stat[presKey] as number || 0) - (stat[tocKey] as number || 0));
     const totalGeral = musicosOrganistas +
         // Ministério
-        (stat.anciaes_presentes || 0) + (stat.diaconos || 0) +
-        (stat.coop_oficio || 0) + (stat.coop_jovens || 0) +
+        naoToc('anciaes_presentes', 'anciaes_tocaram') +
+        naoToc('diaconos', 'diaconos_tocaram') +
+        naoToc('coop_oficio', 'coop_oficio_tocaram') +
+        naoToc('coop_jovens', 'coop_jovens_tocaram') +
         // Encarregados Musicais
-        (stat.enc_regionais_presentes || 0) + (stat.examinadoras || 0) +
+        naoToc('enc_regionais_presentes', 'enc_regionais_tocaram') +
+        naoToc('examinadoras', 'examinadoras_tocaram') +
         // GEM
-        (stat.secretarios_gem || 0) + (stat.secretaria_gem || 0) +
-        (stat.instrutores || 0) + (stat.instrutoras || 0) +
-        (stat.candidatas || 0) + (stat.candidatos || 0) +
+        naoToc('secretarios_gem', 'secretarios_gem_tocaram') +
+        naoToc('secretaria_gem', 'secretaria_gem_tocaram') +
+        naoToc('instrutores', 'instrutores_tocaram') +
+        naoToc('instrutoras', 'instrutoras_tocaram') +
+        naoToc('candidatas', 'candidatas_tocaram') +
+        naoToc('candidatos', 'candidatos_tocaram') +
         // Colaboradores
-        (stat.secretarios_musica || 0) + (stat.secretaria_musica || 0) +
-        (stat.auxiliar_porta || 0) + (stat.colaborador || 0) + (stat.colaboradora || 0) +
+        naoToc('secretarios_musica', 'secretarios_musica_tocaram') +
+        naoToc('secretaria_musica', 'secretaria_musica_tocaram') +
+        naoToc('auxiliar_porta', 'auxiliar_porta_tocaram') +
+        naoToc('colaborador', 'colaborador_tocaram') +
+        naoToc('colaboradora', 'colaboradora_tocaram') +
         // Irmandade
-        (stat.irmas || 0) + (stat.irmaos || 0);
+        naoToc('irmas', 'irmas_tocaram') +
+        naoToc('irmaos', 'irmaos_tocaram');
 
     return { musicosOrganistas, totalGeral };
 }
@@ -98,5 +111,13 @@ export function emptyStatistic(): EventStatistic {
         secretarios_musica: 0, secretaria_musica: 0, auxiliar_porta: 0,
         colaborador: 0, colaboradora: 0,
         irmas: 0, irmaos: 0,
+        anciaes_tocaram: 0, diaconos_tocaram: 0, coop_oficio_tocaram: 0, coop_jovens_tocaram: 0,
+        enc_regionais_tocaram: 0, examinadoras_tocaram: 0,
+        secretarios_gem_tocaram: 0, secretaria_gem_tocaram: 0,
+        instrutores_tocaram: 0, instrutoras_tocaram: 0,
+        candidatas_tocaram: 0, candidatos_tocaram: 0,
+        secretarios_musica_tocaram: 0, secretaria_musica_tocaram: 0,
+        auxiliar_porta_tocaram: 0, colaborador_tocaram: 0, colaboradora_tocaram: 0,
+        irmas_tocaram: 0, irmaos_tocaram: 0,
     };
 }

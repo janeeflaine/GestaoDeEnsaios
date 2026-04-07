@@ -183,6 +183,15 @@ export interface EventStatistic {
   colaborador: number; colaboradora: number;
   // Irmandade
   irmas: number; irmaos: number;
+  // Tocaram (quantos de cada função tocaram instrumento — não são somados novamente no total)
+  anciaes_tocaram: number; diaconos_tocaram: number; coop_oficio_tocaram: number; coop_jovens_tocaram: number;
+  enc_regionais_tocaram: number; examinadoras_tocaram: number;
+  secretarios_gem_tocaram: number; secretaria_gem_tocaram: number;
+  instrutores_tocaram: number; instrutoras_tocaram: number;
+  candidatas_tocaram: number; candidatos_tocaram: number;
+  secretarios_musica_tocaram: number; secretaria_musica_tocaram: number;
+  auxiliar_porta_tocaram: number; colaborador_tocaram: number; colaboradora_tocaram: number;
+  irmas_tocaram: number; irmaos_tocaram: number;
 }
 
 export interface PendingAnciao {
@@ -261,45 +270,45 @@ export const MINISTRY_GROUPS = [
   {
     label: 'Ministério',
     fields: [
-      { key: 'anciaes_presentes', label: 'Anciões' },
-      { key: 'diaconos', label: 'Diáconos' },
-      { key: 'coop_oficio', label: 'Cooperador do O. M.' },
-      { key: 'coop_jovens', label: 'Cooperador de J. e M.' },
+      { key: 'anciaes_presentes', label: 'Anciões',               tocKey: 'anciaes_tocaram' },
+      { key: 'diaconos',          label: 'Diáconos',              tocKey: 'diaconos_tocaram' },
+      { key: 'coop_oficio',       label: 'Cooperador do O. M.',   tocKey: 'coop_oficio_tocaram' },
+      { key: 'coop_jovens',       label: 'Cooperador de J. e M.', tocKey: 'coop_jovens_tocaram' },
     ],
   },
   {
     label: 'Encarregados Musicais',
     fields: [
-      { key: 'enc_regionais_presentes', label: 'Encarregado Regional' },
-      { key: 'examinadoras', label: 'Examinadora' },
+      { key: 'enc_regionais_presentes', label: 'Encarregado Regional', tocKey: 'enc_regionais_tocaram' },
+      { key: 'examinadoras',            label: 'Examinadora',          tocKey: 'examinadoras_tocaram' },
     ],
   },
   {
     label: 'GEM',
     fields: [
-      { key: 'secretarios_gem', label: 'Secretários do GEM' },
-      { key: 'secretaria_gem', label: 'Secretária do GEM' },
-      { key: 'instrutores', label: 'Instrutores' },
-      { key: 'instrutoras', label: 'Instrutoras' },
-      { key: 'candidatas', label: 'Candidatas' },
-      { key: 'candidatos', label: 'Candidatos' },
+      { key: 'secretarios_gem', label: 'Secretários do GEM', tocKey: 'secretarios_gem_tocaram' },
+      { key: 'secretaria_gem',  label: 'Secretária do GEM',  tocKey: 'secretaria_gem_tocaram' },
+      { key: 'instrutores',     label: 'Instrutores',        tocKey: 'instrutores_tocaram' },
+      { key: 'instrutoras',     label: 'Instrutoras',        tocKey: 'instrutoras_tocaram' },
+      { key: 'candidatas',      label: 'Candidatas',         tocKey: 'candidatas_tocaram' },
+      { key: 'candidatos',      label: 'Candidatos',         tocKey: 'candidatos_tocaram' },
     ],
   },
   {
     label: 'Colaboradores',
     fields: [
-      { key: 'secretarios_musica', label: 'Secretário da Música' },
-      { key: 'secretaria_musica', label: 'Secretária da Música' },
-      { key: 'auxiliar_porta', label: 'Auxiliar na Porta' },
-      { key: 'colaborador', label: 'Colaborador' },
-      { key: 'colaboradora', label: 'Colaboradora' },
+      { key: 'secretarios_musica', label: 'Secretário da Música', tocKey: 'secretarios_musica_tocaram' },
+      { key: 'secretaria_musica',  label: 'Secretária da Música', tocKey: 'secretaria_musica_tocaram' },
+      { key: 'auxiliar_porta',     label: 'Auxiliar na Porta',    tocKey: 'auxiliar_porta_tocaram' },
+      { key: 'colaborador',        label: 'Colaborador',          tocKey: 'colaborador_tocaram' },
+      { key: 'colaboradora',       label: 'Colaboradora',         tocKey: 'colaboradora_tocaram' },
     ],
   },
   {
     label: 'Irmandade',
     fields: [
-      { key: 'irmas', label: 'Irmãs' },
-      { key: 'irmaos', label: 'Irmãos' },
+      { key: 'irmas',  label: 'Irmãs', tocKey: 'irmas_tocaram' },
+      { key: 'irmaos', label: 'Irmãos', tocKey: 'irmaos_tocaram' },
     ],
   },
 ] as const;

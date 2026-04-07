@@ -210,7 +210,7 @@ function buildDonutCard(ft: { cordas: number; madeiras: number; metais: number; 
 
 // ─── Ministry grouped list ────────────────────────────────────────────
 function ministryGroupedList(
-    groups: { label: string; items: { label: string; value: number }[] }[],
+    groups: { label: string; items: { label: string; value: number; tocaram: number }[] }[],
     organistasMusicos: number,
 ): PdfContent {
     const stack: PdfContent[] = [];
@@ -218,7 +218,8 @@ function ministryGroupedList(
 
     for (const group of groups) {
         const activeItems = group.items.filter(i => i.value > 0);
-        const groupTotal = group.items.reduce((s, i) => s + i.value, 0);
+        // Group total counts only those who did NOT play
+        const groupTotal = group.items.reduce((s, i) => s + Math.max(0, i.value - i.tocaram), 0);
         groupTotals.push({ label: group.label, total: groupTotal });
         if (activeItems.length === 0) continue;
 
@@ -226,10 +227,14 @@ function ministryGroupedList(
             [{ text: group.label.toUpperCase(), bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3] }],
         ];
         for (const item of activeItems) {
+            const naoTocaram = Math.max(0, item.value - item.tocaram);
+            const subLabel = item.tocaram > 0
+                ? `  ${item.label}  (${item.tocaram} tocaram · ${naoTocaram} no total)`
+                : `  ${item.label}`;
             bodyRows.push([{
                 columns: [
                     { text: String(item.value), bold: true, fontSize: 8, color: C.textDark, width: 18, alignment: 'right' },
-                    { text: '  ' + item.label, fontSize: 6.5, color: C.labelColor, margin: [0, 1, 0, 0] },
+                    { text: subLabel, fontSize: 6, color: C.labelColor, margin: [0, 1, 0, 0] },
                 ],
                 margin: [4, 2, 4, 2],
             }]);
@@ -247,7 +252,7 @@ function ministryGroupedList(
         });
     }
 
-    // TOTAL table
+    // TOTAL table — uses only non-playing members per group
     const totalRows: PdfContent[][] = [[
         { text: 'TOTAL', bold: true, fontSize: 6.5, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 3, 0, 3], colSpan: 2 },
         {},
@@ -343,6 +348,7 @@ function buildStatisticsDocDef(
         items: g.fields.map(f => ({
             label: f.label,
             value: (stat[f.key as keyof EventStatistic] as number) || 0,
+            tocaram: (stat[f.tocKey as keyof EventStatistic] as number) || 0,
         })),
     }));
 
@@ -575,6 +581,18 @@ function buildStatisticsDocDef(
                                     hLineColor: () => C.tableBorder,
                                 },
                             },
+                            // Total Organistas + Músicos
+                            {
+                                table: {
+                                    widths: ['*', 20],
+                                    body: [[
+                                        { text: 'TOTAL', bold: true, fontSize: 7, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [4, 4] },
+                                        { text: String((stat.organistas || 0) + ft.total), bold: true, fontSize: 7, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [2, 4] },
+                                    ]],
+                                },
+                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
+                                margin: [0, 1, 0, 0],
+                            },
 
                             // ── HINOS ─────────────────────────────────
                             {
@@ -678,58 +696,6 @@ function buildStatisticsDocDef(
                                     },
                                 ],
                                 margin: [0, 0, 0, 5],
-                            },
-
-                            // === Row 3: Dark Totals Footer ===
-                            {
-                                columns: [
-                                    // TOTAL GERAL (big)
-                                    {
-                                        width: '50%',
-                                        table: {
-                                            widths: ['*'], body: [[{
-                                                stack: [
-                                                    { text: 'TOTAL GERAL:', fontSize: 8, bold: true, color: '#94A3B8', alignment: 'center', margin: [0, 10, 0, 2] },
-                                                    { text: String(mt.totalGeral), fontSize: 36, bold: true, color: C.textLight, alignment: 'center', margin: [0, 0, 0, 10] },
-                                                ],
-                                                fillColor: C.darkCard,
-                                            }]]
-                                        },
-                                        layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
-                                    },
-                                    // MÚSICOS + ORGANISTAS and TOTAL GERAL (smaller)
-                                    {
-                                        width: '50%',
-                                        stack: [
-                                            {
-                                                table: {
-                                                    widths: ['*'], body: [[{
-                                                        stack: [
-                                                            { text: 'MÚSICOS + ORGANISTAS:', fontSize: 7, bold: true, color: '#94A3B8', alignment: 'right', margin: [0, 6, 8, 0] },
-                                                            { text: String(mt.musicosOrganistas), fontSize: 26, bold: true, color: C.textLight, alignment: 'right', margin: [0, 0, 8, 6] },
-                                                        ],
-                                                        fillColor: C.darkCard,
-                                                    }]]
-                                                },
-                                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
-                                                margin: [4, 0, 0, 0],
-                                            },
-                                            {
-                                                table: {
-                                                    widths: ['*'], body: [[{
-                                                        stack: [
-                                                            { text: 'TOTAL GERAL:', fontSize: 6, bold: true, color: '#94A3B8', alignment: 'right', margin: [0, 4, 8, 0] },
-                                                            { text: String(ft.total), fontSize: 20, bold: true, color: C.textLight, alignment: 'right', margin: [0, 0, 8, 4] },
-                                                        ],
-                                                        fillColor: C.darkCardAlt,
-                                                    }]]
-                                                },
-                                                layout: { hLineWidth: () => 0, vLineWidth: () => 0 },
-                                                margin: [4, 3, 0, 0],
-                                            },
-                                        ],
-                                    },
-                                ],
                             },
                         ],
                         margin: [6, 0, 0, 0],
