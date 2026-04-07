@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, FileText, Eye, Calendar, Users, Music, BarChart3, Trash2, Edit2, Share2, AlertTriangle, X, Bell, CheckCircle, XCircle } from 'lucide-react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { EventStatistic, Anciao, Encarregado, Congregation, RehearsalEvent, UserRole, PendingAnciao, PendingConductor } from '../types';
 import { fetchPendingAnciaes, approvePendingAnciao, rejectPendingAnciao } from '../services/anciaes';
 import { fetchPendingConductors, approvePendingConductor, rejectPendingConductor } from '../services/conductors';
@@ -19,7 +20,7 @@ import {
     deleteStatistic,
 } from '../services/statistics';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 interface StatisticsDashboardProps {
     congregations: Congregation[];
@@ -209,11 +210,35 @@ export default function StatisticsDashboard({
         }],
     };
 
-    const chartOptions = {
+    const quantityChartOptions = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: { position: 'bottom' as const, labels: { color: '#94A3B8', font: { size: 12, weight: 'bold' as const } } },
+            datalabels: {
+                color: '#ffffff',
+                font: { weight: 'bold' as const, size: 14 },
+                formatter: (value: number) => value > 0 ? value : '',
+                display: function (context: any) {
+                    return context.dataset.data[context.dataIndex] > 0;
+                }
+            }
+        },
+    };
+
+    const percentageChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' as const, labels: { color: '#94A3B8', font: { size: 12, weight: 'bold' as const } } },
+            datalabels: {
+                color: '#ffffff',
+                font: { weight: 'bold' as const, size: 14 },
+                formatter: (value: number) => value > 0 ? `${value}%` : '',
+                display: function (context: any) {
+                    return context.dataset.data[context.dataIndex] > 0;
+                }
+            }
         },
     };
 
@@ -316,13 +341,13 @@ export default function StatisticsDashboard({
                     <div className="bg-white p-6 rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Quantidade Total por Família</h3>
                         <div className="w-full h-72 flex items-center justify-center pt-2">
-                            <Doughnut data={quantityChartData} options={chartOptions} />
+                            <Doughnut data={quantityChartData} options={quantityChartOptions as any} />
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-3xl shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center">
                         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Porcentagem Real (%)</h3>
                         <div className="w-full h-72 flex items-center justify-center pt-2">
-                            <Doughnut data={percentageChartData} options={chartOptions} />
+                            <Doughnut data={percentageChartData} options={percentageChartOptions as any} />
                         </div>
                     </div>
                 </div>
