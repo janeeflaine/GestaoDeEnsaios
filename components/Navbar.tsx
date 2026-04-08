@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, List, User, Settings, Music, BarChart3, Sparkles } from 'lucide-react';
+import { Layout, List, User, Settings, Music, BarChart3, Sparkles, LogIn, LogOut } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 
 const Navbar: React.FC<{
@@ -7,7 +7,9 @@ const Navbar: React.FC<{
     setActiveTab: (tab: string) => void;
     user: UserProfile | null;
     isGuest?: boolean;
-}> = ({ activeTab, setActiveTab, user, isGuest = false }) => (
+    onLoginClick: () => void;
+    onLogoutClick: () => void;
+}> = ({ activeTab, setActiveTab, user, isGuest = false, onLoginClick, onLogoutClick }) => (
     <nav className="fixed bottom-0 left-0 right-0 glass-panel px-6 py-3 flex justify-between items-center z-50 md:sticky md:top-0 md:border-b md:border-t-0">
         <div className="hidden md:flex items-center gap-2 font-bold text-indigo-400 text-xl tracking-tighter">
             <div className="bg-indigo-600 p-1.5 rounded-lg text-white"><Music size={18} /></div>
@@ -33,14 +35,30 @@ const Navbar: React.FC<{
                 <span className="text-[10px] font-black uppercase tracking-widest">Estatísticas</span>
             </button>
 
-            <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'profile' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                {user?.photoUrl ? (
-                    <img src={user.photoUrl} className="w-5 h-5 rounded-full object-cover" alt="Perfil" />
-                ) : (
-                    <User size={20} />
-                )}
-                <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
-            </button>
+            {!isGuest && (
+                <>
+                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'profile' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                        {user?.photoUrl ? (
+                            <img src={user.photoUrl} className="w-5 h-5 rounded-full object-cover" alt="Perfil" />
+                        ) : (
+                            <User size={20} />
+                        )}
+                        <span className="text-[10px] font-black uppercase tracking-widest">Perfil</span>
+                    </button>
+
+                    <button onClick={onLogoutClick} className="flex flex-col items-center gap-1 transition-colors text-slate-500 hover:text-rose-400">
+                        <LogOut size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
+                    </button>
+                </>
+            )}
+
+            {isGuest && (
+                <button onClick={onLoginClick} className="flex flex-col items-center gap-1 transition-colors text-slate-500 hover:text-emerald-400">
+                    <LogIn size={20} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Entrar</span>
+                </button>
+            )}
 
             {/* IA: só para autenticados (não guest) */}
             {user && !isGuest && (

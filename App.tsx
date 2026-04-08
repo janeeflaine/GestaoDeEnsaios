@@ -60,11 +60,12 @@ import type { EventStatistic } from './types';
 export default function App() {
   // ── Auth state ────────────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
-  const [isGuest, setIsGuest] = useState(() => sessionStorage.getItem('guestMode') === 'true');
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const isGuest = !session;
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const enterGuest = () => { sessionStorage.setItem('guestMode', 'true'); setIsGuest(true); };
-  const exitGuest = () => { sessionStorage.removeItem('guestMode'); setIsGuest(false); };
+  const exitGuest = () => setShowAuthModal(true);
 
   // ── Shared stat (via ?stat_share=TOKEN in URL) ────────────────
   const [sharedStat, setSharedStat] = useState<EventStatistic | null>(null);
@@ -152,12 +153,16 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
+      setIsCheckingSession(false);
       if (s) fetchUserProfileData(s.user.id, s);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (s) fetchUserProfileData(s.user.id, s);
+      if (s) {
+        fetchUserProfileData(s.user.id, s);
+        setShowAuthModal(false);
+      }
       else setUserProfile(null);
     });
 
@@ -348,7 +353,7 @@ export default function App() {
     const dayValue = fd.get('day') as string;
     const weekday = fd.get('weekday') as string;
     const type = fd.get('type') as EventType;
-    const monthIndex = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].indexOf(month);
+    const monthIndex = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].indexOf(month);
     const needsConductor = ![EventType.BATISMO, EventType.BUSCA_DONS, EventType.REUNIAO_MOCIDADE].includes(type);
 
     const eventData = {
@@ -503,7 +508,6 @@ export default function App() {
     } finally {
       setSession(null);
       setUserProfile(null);
-      exitGuest();
       setActiveTab('dashboard');
     }
   };
@@ -680,13 +684,29 @@ export default function App() {
   };
 
   // ── Guard ─────────────────────────────────────────────────────
-  if (!session && !isGuest) {
-    return <Auth onGuestAccess={enterGuest} />;
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
-    <div className="pb-24 flex flex-col min-h-screen selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} user={userProfile} isGuest={isGuest} />
+    <div className="pb-24 flex flex-col min-h-screen selection:bg-indigo-100 selection:text-indigo-900 bg-slate-50 relative">
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900">
+          <Auth onClose={() => setShowAuthModal(false)} />
+        </div>
+      )}
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        user={userProfile}
+        isGuest={isGuest}
+        onLoginClick={() => setShowAuthModal(true)}
+        onLogoutClick={handleLogout}
+      />
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       <main className="max-w-6xl mx-auto w-full flex-grow">
@@ -735,7 +755,7 @@ export default function App() {
             <ProfilePage
               userProfile={userProfile}
               isGuest={isGuest}
-              setIsGuest={exitGuest}
+              onLoginClick={exitGuest}
               formData={formData}
               setFormData={setFormData}
               showSuccess={showSuccess}

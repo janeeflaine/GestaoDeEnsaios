@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Mail, Lock, User, Music, ChevronRight, LogIn, UserPlus, ArrowLeft, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, Music, ChevronRight, LogIn, UserPlus, ArrowLeft, Loader2, X } from 'lucide-react';
 import { INSTRUMENTS } from '../types';
 
 interface AuthProps {
-    onGuestAccess: () => void;
+    onClose: () => void;
 }
 
-const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
+const Auth: React.FC<AuthProps> = ({ onClose }) => {
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
     const [isMusician, setIsMusician] = useState(false);
@@ -66,7 +66,10 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                 <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-rose-600 rounded-full blur-[120px]"></div>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-2xl border border-white/10 w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 animate-in zoom-in-95 duration-500 relative z-10">
+            <div className="bg-white/10 backdrop-blur-2xl border border-white/10 w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 animate-in zoom-in-95 duration-500 relative z-10 px-6 sm:px-10">
+                <button type="button" onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors p-2 z-50">
+                    <X size={20} />
+                </button>
                 <div className="text-center mb-10">
                     <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
                         <LogIn className="text-white" size={32} />
@@ -192,22 +195,6 @@ const Auth: React.FC<AuthProps> = ({ onGuestAccess }) => {
                             <ArrowLeft size={14} /> JÁ TEM CONTA? VOLTAR PARA O LOGIN
                         </button>
                     )}
-
-                    <div className="relative py-2">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-white/5"></div>
-                        </div>
-                        <div className="relative flex justify-center text-[10px] uppercase font-black text-white/10 tracking-[0.3em]">
-                            <span className="bg-slate-900/50 px-4 backdrop-blur-sm">ou</span>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={onGuestAccess}
-                        className="w-full bg-white/5 text-white/60 font-black py-4 rounded-2xl border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-all hover:text-white text-xs"
-                    >
-                        <ArrowLeft size={16} /> ENTRAR COMO VISITANTE
-                    </button>
                 </div>
             </div>
         </div>

@@ -25,7 +25,7 @@ interface FormData {
 interface ProfilePageProps {
   userProfile: UserProfile | null;
   isGuest: boolean;
-  setIsGuest: () => void;
+  onLoginClick: () => void;
   formData: FormData;
   setFormData: (data: FormData) => void;
   showSuccess: boolean;
@@ -39,7 +39,7 @@ interface ProfilePageProps {
 export const ProfilePage: React.FC<ProfilePageProps> = ({
   userProfile,
   isGuest,
-  setIsGuest,
+  onLoginClick,
   formData,
   setFormData,
   showSuccess,
@@ -63,7 +63,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           {isGuest && (
             <div className="absolute top-4 right-4 animate-bounce">
               <button
-                onClick={() => setIsGuest()}
+                onClick={onLoginClick}
                 className="bg-white/20 hover:bg-white/30 text-white text-[10px] font-black px-4 py-2 rounded-full border border-white/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-2"
               >
                 <UserPlus size={12} /> Criar Conta
@@ -82,9 +82,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               type="button"
               disabled={isGuest}
               onClick={() => fileInputRef.current?.click()}
-              className={`absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12 ${
-                isGuest ? 'opacity-30 cursor-not-allowed' : ''
-              }`}
+              className={`absolute -bottom-2 -right-2 bg-white text-indigo-600 p-2.5 rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-90 transition-all border-4 border-indigo-600 group-hover:rotate-12 ${isGuest ? 'opacity-30 cursor-not-allowed' : ''
+                }`}
             >
               <Camera size={18} strokeWidth={2.5} />
             </button>
@@ -115,7 +114,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <Info className="text-amber-500" size={20} />
               <p className="text-xs font-medium text-amber-700">
                 Como visitante, suas edições no perfil não serão salvas.{' '}
-                <button onClick={() => setIsGuest()} className="underline font-black">
+                <button type="button" onClick={onLoginClick} className="underline font-black">
                   Crie uma conta
                 </button>{' '}
                 para gerenciar seu perfil musical.
@@ -227,21 +226,22 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <button
                 type="submit"
                 disabled={showSuccess}
-                className={`flex-1 font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all ${
-                  showSuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
+                className={`flex-1 font-black py-4 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all ${showSuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
               >
                 {showSuccess ? 'Perfil Salvo!' : 'Salvar Perfil'}
                 <CheckCircle size={20} className={showSuccess ? 'animate-bounce' : ''} />
               </button>
             )}
-            <button
-              type="button"
-              onClick={onLogout}
-              className="px-6 bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 font-black text-xs"
-            >
-              <LogOut size={18} /> {isGuest ? 'SAIR DO MODO VISITANTE' : 'SAIR DA CONTA'}
-            </button>
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="px-6 bg-slate-100 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-colors flex items-center justify-center gap-2 font-black text-xs"
+              >
+                <LogOut size={18} /> SAIR DA CONTA
+              </button>
+            )}
           </div>
         </form>
       </div>
