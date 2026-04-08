@@ -199,7 +199,7 @@ function buildMinistryGroupBlock(
         bodyRows.push([{
             columns: [
                 { text: String(item.value), bold: true, fontSize: 7, color: C.textDark, width: 14, alignment: 'left' },
-                { text: subLabel, fontSize: 5.5, color: C.labelColor, margin: [2, 0.5, 0, 0] },
+                { text: subLabel, fontSize: 7, color: C.textDark, margin: [2, 0.5, 0, 0] },
             ],
             margin: [3, 1.5, 3, 1.5],
         }]);
@@ -250,14 +250,14 @@ function ministryTwoColumnLayout(
         {},
     ]];
     totalRows.push([
-        { text: String(organistasMusicos), bold: true, fontSize: 6, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
-        { text: 'Org. + Músicos', fontSize: 5.5, color: C.labelColor, margin: [2, 1.5, 0, 1.5] },
+        { text: String(organistasMusicos), bold: true, fontSize: 7, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
+        { text: 'Org. + Músicos', fontSize: 7, color: C.textDark, margin: [2, 1.5, 0, 1.5] },
     ]);
     for (const gt of groupTotals) {
         if (gt.total === 0) continue;
         totalRows.push([
-            { text: String(gt.total), bold: true, fontSize: 6, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
-            { text: gt.label, fontSize: 5.5, color: C.labelColor, margin: [2, 1.5, 0, 1.5] },
+            { text: String(gt.total), bold: true, fontSize: 7, color: C.textDark, alignment: 'left', width: 14, margin: [3, 1.5, 0, 1.5] },
+            { text: gt.label, fontSize: 7, color: C.textDark, margin: [2, 1.5, 0, 1.5] },
         ]);
     }
 
