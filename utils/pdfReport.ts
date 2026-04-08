@@ -27,7 +27,7 @@ const C = {
     textLight: '#FFFFFF',
     darkCard: '#1E293B',
     darkCardAlt: '#334155',
-    tableBorder: '#D0D0D0',
+    tableBorder: '#888888',
     tableZebra: '#F8F8F8',
     hinoBarBg: '#D6DAE0',
 };
