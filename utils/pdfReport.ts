@@ -272,7 +272,17 @@ function ministryTwoColumnLayout(
         margin: [0, 2, 0, 0],
     };
 
-    return { stack: [columnsContent, totalTable] };
+    const finalTotalGeral = organistasMusicos + groupTotals.reduce((s, g) => s + g.total, 0);
+
+    const totalHighlight: PdfContent = {
+        stack: [
+            { text: String(finalTotalGeral), fontSize: 14, bold: true, color: C.sectionHeader, alignment: 'center' },
+            { text: 'TOTAL GERAL', fontSize: 6, bold: true, color: C.labelColor, alignment: 'center' },
+        ],
+        margin: [0, 4, 0, 0],
+    };
+
+    return { stack: [columnsContent, totalTable, totalHighlight] };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
