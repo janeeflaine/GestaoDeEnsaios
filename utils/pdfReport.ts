@@ -189,7 +189,7 @@ function buildMinistryGroupBlock(
     if (activeItems.length === 0) return null;
 
     const bodyRows: PdfContent[][] = [
-        [{ text: group.label.toUpperCase(), bold: true, fontSize: 6, color: C.textLight, fillColor: C.headerBar, alignment: 'center', margin: [0, 2, 0, 2] }],
+        [{ text: group.label.toUpperCase(), bold: true, fontSize: 6, color: C.sectionHeader, fillColor: C.headerBar, alignment: 'center', margin: [0, 2, 0, 2] }],
     ];
     for (const item of activeItems) {
         const naoTocaram = Math.max(0, item.value - item.tocaram);
@@ -246,7 +246,7 @@ function ministryTwoColumnLayout(
 
     // TOTAL row (compact)
     const totalRows: PdfContent[][] = [[
-        { text: 'TOTAL', bold: true, fontSize: 6, color: C.textLight, fillColor: C.sectionHeader, alignment: 'center', margin: [0, 2, 0, 2], colSpan: 2 },
+        { text: 'TOTAL', bold: true, fontSize: 6, color: C.sectionHeader, fillColor: C.headerBar, alignment: 'center', margin: [0, 2, 0, 2], colSpan: 2 },
         {},
     ]];
     totalRows.push([
