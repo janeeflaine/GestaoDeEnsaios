@@ -49,19 +49,25 @@ export async function fetchMyStatistics(): Promise<EventStatistic[]> {
 
   let query = supabase
     .from('event_statistics')
-    .select('*')
+    .select('*, enc_regionais:stat_conductors(conductors(*))')
     .order('event_date', { ascending: false });
 
   if (userId) {
     query = query.eq('created_by', userId);
   } else {
-    // If not logged in, return nothing (guest uses sessionStorage)
     return [];
   }
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as EventStatistic[];
+
+  // Map the join result to flat Encarregado objects
+  return (data ?? []).map((s: any) => ({
+    ...s,
+    enc_regionais: (s.enc_regionais || [])
+      .map((sc: any) => sc.conductors)
+      .filter(Boolean),
+  })) as EventStatistic[];
 }
 
 export async function insertStatistic(

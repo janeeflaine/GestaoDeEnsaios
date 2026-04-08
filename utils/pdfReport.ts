@@ -434,7 +434,13 @@ function buildStatisticsDocDef(
                                     {
                                         stack: [
                                             { text: 'ENC. REG./LOCAL:', fontSize: 6, bold: true, color: C.labelColor, margin: [0, 0, 0, 1] },
-                                            { text: `IR. ${(stat.enc_regionais_nomes_custom?.join(', ') || '-').toUpperCase()}`, fontSize: 8, bold: true, color: C.textDark },
+                                            {
+                                                text: `IR. ${([
+                                                    ...(stat.enc_regionais?.map(e => e.name) || []),
+                                                    ...(stat.enc_regionais_nomes_custom || [])
+                                                ].join(', ') || '-').toUpperCase()}`,
+                                                fontSize: 8, bold: true, color: C.textDark
+                                            },
                                         ],
                                     },
                                 ],
