@@ -41,7 +41,9 @@ export default function StatisticsForm({
     });
     // Custom ancião name used locally (non-admin flow or editing a stat that had one)
     const [customAnciaoName, setCustomAnciaoName] = useState<string>(editingStat?.anciao_nome_custom || '');
-    const [selectedEncRegionais, setSelectedEncRegionais] = useState<string[]>([]);
+    const [selectedEncRegionais, setSelectedEncRegionais] = useState<string[]>(
+        () => editingStat?.enc_regionais?.map(e => e.id) || []
+    );
     const [showAnciaoModal, setShowAnciaoModal] = useState(false);
     const [showEncModal, setShowEncModal] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -116,9 +118,15 @@ export default function StatisticsForm({
 
             // ── Guest mode: pass stat back to parent for sessionStorage ──
             if (isGuest) {
+                // For guests, we must manually map the selectedEncRegionais IDs to objects
+                // because there is no junction table in sessionStorage
+                const mappedRegionais = selectedEncRegionais.map(id =>
+                    encRegionais.find(e => e.id === id)
+                ).filter((e): e is Encarregado => !!e);
+
                 const guestStat: EventStatistic = editingStat?.id
-                    ? { ...base, id: editingStat.id }
-                    : { ...base, id: crypto.randomUUID() };
+                    ? { ...base, id: editingStat.id, enc_regionais: mappedRegionais }
+                    : { ...base, id: crypto.randomUUID(), enc_regionais: mappedRegionais };
                 onSaved(guestStat);
                 return;
             }

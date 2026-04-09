@@ -134,7 +134,12 @@ export const PdfExportTemplate = forwardRef<HTMLDivElement, PdfExportTemplatePro
                     <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center gap-3" style={{ borderLeft: '4px solid #9ca3af' }}>
                         <div className="p-2 bg-gray-100 rounded-lg"><PenLine className="w-5 h-5 text-gray-700" /></div>
                         <div>
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Enc. Reg.: Ir. {encRegional?.name || '-'}</p>
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                Enc. Reg.: Ir. {[
+                                    ...(stat.enc_regionais?.map(e => e.name) || []),
+                                    ...(stat.enc_regionais_nomes_custom || [])
+                                ].join(', ') || '-'}
+                            </p>
                             <p className="text-[8px] text-gray-400">LOCALIDADE: {encRegional?.city ? `${encRegional.city} - ${encRegional.state}` : '-'}</p>
                         </div>
                     </div>
